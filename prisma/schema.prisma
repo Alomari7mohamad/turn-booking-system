@@ -1,0 +1,282 @@
+// Multi-Tenant SaaS Booking System
+// نمط العزل: Shared Database / Shared Schema باستخدام businessId على كل جدول خاص بالمحل.
+//
+// ⚙️  قاعدة البيانات: SQLite للتطوير المحلي السريع (لا يحتاج تثبيت).
+//     للتبديل إلى MySQL (الإنتاج): غيّر provider إلى "mysql" و DATABASE_URL في .env
+//     إلى mysql://user:pass@host:3306/turn_booking ثم نفّذ: npx prisma db push
+//     (الـ schema محايد للمزوّد: لا enums ولا أنواع أصلية، فالتبديل سلس.)
+//
+// قيم الحقول النصية ذات الدلالة (تُتحقق في طبقة التطبيق):
+//   role:               SUPER_ADMIN | BUSINESS_OWNER | STAFF | CUSTOMER
+//   Appointment.status: PENDING | CONFIRMED | COMPLETED | CANCELLED | NO_SHOW
+//   Subscription.plan:  MONTHLY | YEARLY
+//   Subscription.status:ACTIVE | EXPIRED | CANCELLED
+//   Notification.type:  NEW_APPOINTMENT | CANCELLED_APPOINTMENT | SYSTEM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Tenant root: Business
+// ============================================================
+model Business {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique // يُستخدم في رابط الحجز العام /book/:slug
+  email     String?
+  phone     String?
+  address   String?
+  logoUrl   String?
+  brandColor String?  @default("#064e3b") @map("brand_color")
+  timezone  String   @default("Asia/Riyadh")
+  isActive  Boolean  @default(true)
+  requiresAppointmentApproval Boolean @default(true) @map("requires_appointment_approval")
+
+  // إعدادات الدفع (يتحكم بها صاحب المحل)
+  onlinePaymentEnabled Boolean @default(false) @map("online_payment_enabled")
+  payAtStoreEnabled    Boolean @default(true)  @map("pay_at_store_enabled")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  employees     Employee[]
+  services      Service[]
+  workingHours  WorkingHours[]
+  appointments  Appointment[]
+  blockedTimes  BlockedTime[]
+  notifications Notification[]
+  subscriptions Subscription[]
+
+  @@map("businesses")
+}
+
+// ============================================================
+// Users (SUPER_ADMIN له businessId = null)
+// ============================================================
+model User {
+  id           Int      @id @default(autoincrement())
+  businessId   Int? // null فقط لـ SUPER_ADMIN
+  name         String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  loginPassword String? @map("login_password")
+  role         String   @default("BUSINESS_OWNER")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  business        Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeProfile Employee?
+
+  @@index([businessId])
+  @@map("users")
+}
+
+// ============================================================
+// Employees (الموظفون مقدّمو الخدمة)
+// ============================================================
+model Employee {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  userId     Int?     @unique // ربط بحساب دخول STAFF (اختياري)
+  name       String
+  phone      String?
+  title      String? // المسمى الوظيفي
+  loginPassword String? @map("login_password")
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user         User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  services     EmployeeService[]
+  workingHours WorkingHours[]
+  appointments Appointment[]
+  blockedTimes BlockedTime[]
+
+  @@index([businessId])
+  @@map("employees")
+}
+
+// ============================================================
+// Services (الخدمات: مدة + سعر)
+// ============================================================
+model Service {
+  id              Int      @id @default(autoincrement())
+  businessId      Int
+  name            String
+  description     String?
+  durationMinutes Int // مدة الخدمة بالدقائق (أساس حساب الفتحات)
+  price           Float    @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employees    EmployeeService[]
+  appointments Appointment[]
+  workingHours WorkingHours[]
+
+  @@index([businessId])
+  @@map("services")
+}
+
+// جدول الربط: أي موظف يقدّم أي خدمة
+model EmployeeService {
+  employeeId Int
+  serviceId  Int
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  service  Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, serviceId])
+  @@index([serviceId])
+  @@map("employee_services")
+}
+
+// ============================================================
+// Working hours (دوام: على مستوى المحل أو موظف معيّن)
+// employeeId = null تعني الدوام الافتراضي للمحل كله
+// ============================================================
+model WorkingHours {
+  id         Int     @id @default(autoincrement())
+  businessId Int
+  employeeId Int? // null = دوام المحل العام
+  serviceId  Int?
+  dayOfWeek  Int // 0=الأحد ... 6=السبت
+  startTime  String // "09:00"
+  endTime    String // "17:00"
+  breakStartTime String? @map("break_start_time") // "13:00"
+  breakEndTime   String? @map("break_end_time") // "14:00"
+  isClosed   Boolean @default(false) // إغلاق هذا اليوم كليًا
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  service  Service?  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([employeeId])
+  @@index([serviceId])
+  @@map("working_hours")
+}
+
+// ============================================================
+// Appointments (الحجوزات)
+// ============================================================
+model Appointment {
+  id            Int      @id @default(autoincrement())
+  businessId    Int
+  serviceId     Int
+  employeeId    Int
+  customerName  String
+  customerPhone String
+  customerEmail String?
+  startAt       DateTime
+  endAt         DateTime
+  status        String   @default("PENDING")
+  notes         String?
+
+  // الدفع
+  paymentMethod    String?   @map("payment_method") // ONLINE | PAY_AT_STORE
+  paymentStatus    String    @default("PENDING") @map("payment_status") // PENDING | PAID | FAILED | REFUNDED
+  paymentAmount    Float?    @map("payment_amount")
+  paymentReference String?   @unique @map("payment_reference") // معرّف عملية الدفع لدى البوابة
+  paidAt           DateTime? @map("paid_at")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service  Service  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  // شبكة أمان على مستوى DB ضد الحجز المكرّر لنفس الموظف في نفس لحظة البداية.
+  // الفحص الحقيقي للتداخل يتم في availability.service ضمن transaction.
+  @@unique([employeeId, startAt])
+  @@index([businessId])
+  @@index([startAt])
+  @@map("appointments")
+}
+
+// ============================================================
+// Subscriptions (الاشتراك: شهري / سنوي)
+// ============================================================
+model Subscription {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  plan       String // MONTHLY | YEARLY
+  status     String   @default("ACTIVE")
+  price      Float    @default(0)
+  startsAt   DateTime @default(now())
+  endsAt     DateTime
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@map("subscriptions")
+}
+
+// ============================================================
+// Blocked times (إغلاق وقت/يوم معيّن)
+// ============================================================
+model BlockedTime {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  employeeId Int? // null = يخص كامل المحل
+  startAt    DateTime
+  endAt      DateTime
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@map("blocked_times")
+}
+
+// ============================================================
+// Audit Log (سجلّ الأحداث المهمة)
+// ============================================================
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  businessId Int? // المحل المرتبط بالحدث (null لأحداث على مستوى المنصّة)
+  userId     Int? // الفاعل (null لأحداث الزبون العام/النظام)
+  actorName  String? // اسم الفاعل وقت الحدث (للعرض حتى لو حُذف المستخدم)
+  action     String // BOOKING_CREATED | BOOKING_CANCELLED | BOOKING_UPDATED | PAYMENT_STATUS_CHANGED | PAYMENT_SETTINGS_CHANGED | WORKING_HOURS_CHANGED
+  entityType String // Appointment | Business | WorkingHours ...
+  entityId   Int?
+  meta       String? // تفاصيل إضافية بصيغة JSON
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// Notifications
+// ============================================================
+model Notification {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  userId     Int? // المستلِم (اختياري)
+  type       String   @default("SYSTEM")
+  message    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@map("notifications")
+}
