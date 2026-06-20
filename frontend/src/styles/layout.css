@@ -1,0 +1,535 @@
+/* =================================================================
+   تخطيط لوحة التحكم (Dashboard shell) + صفحة الحجز العامة
+   ================================================================= */
+
+/* ---------- الهيكل العام ---------- */
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ---------- الشريط الجانبي ---------- */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-left: 1px solid var(--border); /* RTL: الحد على اليسار يفصل المحتوى */
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0; /* يلتصق باليمين في RTL */
+  z-index: 50;
+  transition: transform 0.25s ease;
+  max-width: 88vw;
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.brand-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+.brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.brand-logo span {
+  font-size: 22px;
+}
+.brand-name {
+  font-weight: 800;
+  font-size: 16px;
+  line-height: 1.2;
+}
+.brand-sub {
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+
+.nav {
+  flex: 1;
+  padding: 14px 12px;
+  overflow-y: auto;
+}
+.nav-section {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-soft);
+  padding: 14px 12px 6px;
+  letter-spacing: 0.4px;
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 13px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 3px;
+  transition: all 0.14s;
+}
+.nav-link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.nav-link.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.nav-link .nav-ico {
+  font-size: 18px;
+  width: 22px;
+  text-align: center;
+}
+.sidebar-foot {
+  padding: 14px;
+  border-top: 1px solid var(--border);
+}
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+}
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--primary-soft-2);
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ---------- المنطقة الرئيسية ---------- */
+.main {
+  flex: 1;
+  margin-right: var(--sidebar-w); /* مساحة الشريط الجانبي على اليمين في RTL */
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.shell.sidebar-closed .sidebar {
+  transform: translateX(100%);
+}
+.shell.sidebar-closed .main {
+  margin-right: 0;
+}
+.topbar {
+  height: var(--topbar-h);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 26px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.topbar-title {
+  font-weight: 700;
+  font-size: 16px;
+}
+.content {
+  padding: 26px;
+  flex: 1;
+  width: 100%;
+  max-width: 1680px;
+  margin-inline: auto;
+}
+.burger {
+  display: block;
+  font-size: 24px;
+  background: none;
+  border: none;
+  color: var(--text);
+}
+
+/* ---------- موبايل ---------- */
+.scrim {
+  display: none;
+}
+@media (max-width: 1024px) {
+  .sidebar {
+    transform: translateX(100%); /* مخفي خارج الحافة اليمنى */
+  }
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg);
+  }
+  .main {
+    margin-right: 0;
+  }
+  .burger {
+    display: block;
+  }
+  .content {
+    max-width: 100%;
+  }
+  .scrim.show {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.4);
+    z-index: 45;
+  }
+}
+
+/* =================================================================
+   صفحة تسجيل الدخول
+   ================================================================= */
+.auth-wrap {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  position: relative;
+}
+.auth-language {
+  position: absolute;
+  inset-block-start: 16px;
+  inset-inline-end: 16px;
+  z-index: 6;
+}
+.auth-aside {
+  background:
+    radial-gradient(circle at 22% 22%, rgba(212, 175, 55, 0.22), transparent 28%),
+    linear-gradient(135deg, #022c22 0%, #064e3b 58%, #0f3f31 100%);
+  color: #fff;
+  padding: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 22px;
+}
+.auth-aside h1 {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.auth-aside p {
+  font-size: 16px;
+  opacity: 0.92;
+  max-width: 420px;
+}
+.login-logo {
+  width: 86px;
+  height: 86px;
+  border-color: rgba(212, 175, 55, 0.65);
+}
+.auth-feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+}
+.auth-feature span {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(212, 175, 55, 0.2);
+  display: grid;
+  place-items: center;
+}
+.auth-form-side {
+  display: grid;
+  place-items: center;
+  padding: 40px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+}
+.demo-box {
+  background: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  font-size: 13px;
+  margin-top: 18px;
+}
+.demo-box b {
+  color: var(--primary);
+}
+.demo-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  cursor: pointer;
+}
+.demo-row:hover { color: var(--primary); }
+@media (max-width: 880px) {
+  .auth-wrap { grid-template-columns: 1fr; }
+  .auth-aside { display: none; }
+}
+
+/* =================================================================
+   صفحة الحجز العامة (Public booking)
+   ================================================================= */
+.booking-page {
+  min-height: 100vh;
+  background: var(--bg);
+  position: relative;
+}
+.booking-language {
+  position: absolute;
+  inset-block-start: 16px;
+  inset-inline-end: 16px;
+  z-index: 5;
+}
+.booking-hero {
+  background: var(--gradient);
+  color: #fff;
+  padding: 40px 20px 70px;
+  text-align: center;
+}
+.booking-hero h1 {
+  font-size: 28px;
+  font-weight: 800;
+}
+.booking-logo {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 16px;
+  background: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
+}
+.booking-hero p {
+  opacity: 0.92;
+  margin-top: 6px;
+}
+.booking-container {
+  max-width: 720px;
+  margin: -48px auto 40px;
+  padding: 0 16px;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+.step-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.step-pill.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.step-pill.done {
+  background: var(--success-soft);
+  color: var(--success);
+  border-color: transparent;
+}
+.step-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+}
+
+.option-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.option-card {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--surface);
+}
+.option-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.option-card.selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.option-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+.option-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+}
+.slot {
+  padding: 11px 6px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.14s;
+}
+.slot:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.slot.selected {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.success-screen {
+  text-align: center;
+  padding: 30px;
+}
+.success-circle {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: var(--success-soft);
+  color: var(--success);
+  display: grid;
+  place-items: center;
+  font-size: 42px;
+  margin: 0 auto 18px;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --topbar-h: 62px;
+  }
+  .sidebar {
+    width: min(320px, 88vw);
+  }
+  .sidebar-brand {
+    padding: 16px;
+  }
+  .nav {
+    padding: 10px;
+  }
+  .nav-link {
+    min-height: 42px;
+  }
+  .sidebar-foot {
+    padding: 10px;
+  }
+  .topbar {
+    padding: 0 14px;
+    gap: 10px;
+  }
+  .topbar > .row:first-child {
+    min-width: 0;
+  }
+  .topbar-title {
+    min-width: 0;
+    max-width: 48vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+  }
+  .content {
+    padding: 14px;
+  }
+  .auth-form-side {
+    padding: 20px 14px;
+    align-items: start;
+  }
+  .auth-card {
+    max-width: 100%;
+  }
+  .demo-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .booking-hero {
+    padding: 28px 14px 58px;
+  }
+  .booking-hero h1 {
+    font-size: 22px;
+  }
+  .booking-logo {
+    width: 76px;
+    height: 76px;
+  }
+  .booking-container {
+    margin-top: -38px;
+    padding-inline: 12px;
+  }
+  .stepper {
+    justify-content: stretch;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .step-pill {
+    justify-content: center;
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+  .option-grid,
+  .slots-grid {
+    grid-template-columns: 1fr;
+  }
+  .option-meta {
+    flex-wrap: wrap;
+  }
+  .success-screen {
+    padding: 20px 14px;
+  }
+}
+
+@media (max-width: 420px) {
+  .topbar-title {
+    max-width: 40vw;
+  }
+  .stepper {
+    grid-template-columns: 1fr;
+  }
+}

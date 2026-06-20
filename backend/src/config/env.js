@@ -1,0 +1,23 @@
+import dotenv from "dotenv";
+dotenv.config();
+
+function required(key, fallback) {
+  const val = process.env[key] ?? fallback;
+  if (val === undefined) {
+    throw new Error(`Missing required env var: ${key}`);
+  }
+  return val;
+}
+
+export const env = {
+  port: parseInt(process.env.PORT || "4000", 10),
+  nodeEnv: process.env.NODE_ENV || "development",
+  jwtSecret: required("JWT_SECRET", "dev-secret"),
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
+  clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
+  isProd: (process.env.NODE_ENV || "development") === "production",
+
+  // الدفع: اسم البوابة المستخدمة (mock افتراضيًا) + سر التحقق من الـ webhook
+  paymentProvider: process.env.PAYMENT_PROVIDER || "mock",
+  paymentWebhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || "dev-webhook-secret",
+};

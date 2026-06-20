@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# env
+.env
+.env.local
+
+# database (SQLite dev)
+*.db
+*.db-journal
+
+# build output
+dist/
+build/
+
+# logs
+*.log
+
+# OS / editor
+.DS_Store
+.playwright-mcp/
