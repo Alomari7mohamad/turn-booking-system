@@ -7,6 +7,7 @@ import { notFound, errorHandler } from "./middleware/error.js";
 import { rateLimit, securityHeaders } from "./middleware/security.js";
 
 export function createApp() {
+  
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -26,5 +27,11 @@ export function createApp() {
   app.use(notFound);
   app.use(errorHandler);
 
+ 
   return app;
+
+
 }
+const app = createApp();
+
+export default app;
