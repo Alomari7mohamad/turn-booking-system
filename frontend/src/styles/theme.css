@@ -1160,6 +1160,8 @@ tbody tr:hover {
 .select,
 .textarea {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 11px 14px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
@@ -1167,6 +1169,15 @@ tbody tr:hover {
   background: var(--surface);
   color: var(--text);
   transition: border 0.15s, box-shadow 0.15s;
+}
+
+.input[type="date"] {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .input:focus,
 .select:focus,

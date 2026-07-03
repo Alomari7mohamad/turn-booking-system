@@ -513,17 +513,6 @@ export default function PublicBooking() {
             {step === "time" && (
               <>
                 <PageTitle title="اختر الموعد" subtitle="اختر التاريخ واليوم والوقت المناسب لك" />
-                <div className="booking-week-strip">
-                  {Array.from({ length: 7 }).map((_, index) => {
-                    const date = addDays(new Date(), index);
-                    const dateStr = dateInputFrom(date);
-                    return (
-                      <button key={dateStr} className={selectedDate === dateStr ? "active" : ""} onClick={() => setSelectedDate(dateStr)}>
-                        <span>{dayKeys[date.getDay()]}</span><strong>{date.getDate()}</strong>
-                      </button>
-                    );
-                  })}
-                </div>
                 <div className="booking-month-head">
                   <button onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}>‹</button>
                   <strong>{monthNames[monthDate.getMonth()]} {monthDate.getFullYear()}</strong>
