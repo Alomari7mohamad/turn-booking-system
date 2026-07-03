@@ -4,6 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { hashPassword } from "../utils/password.js";
 import { logAudit, AUDIT } from "../services/audit.service.js";
 import { recordCustomerPayment } from "../services/customer.service.js";
+import { ensureImageColumnsCapacity } from "../services/databaseMaintenance.service.js";
 
 function slugify(str) {
   return String(str)
@@ -282,6 +283,10 @@ export const createBusiness = asyncHandler(async (req, res) => {
     freeMonths = 0,
   } = req.body;
 
+  if (logoUrl !== undefined || bookingHeroImageUrl !== undefined) {
+    await ensureImageColumnsCapacity(prisma);
+  }
+
   if (!name || !ownerName || !ownerEmail || !ownerPassword) {
     throw ApiError.badRequest("اسم المحل وبيانات صاحب المحل مطلوبة");
   }
@@ -386,6 +391,10 @@ export const updateBusiness = asyncHandler(async (req, res) => {
     subscriptionEndsAt,
     subscriptionFreeMonths,
   } = req.body;
+
+  if (logoUrl !== undefined || bookingHeroImageUrl !== undefined) {
+    await ensureImageColumnsCapacity(prisma);
+  }
 
   const data = {};
   if (name !== undefined) data.name = name;

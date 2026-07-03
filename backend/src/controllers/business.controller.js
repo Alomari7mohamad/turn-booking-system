@@ -8,6 +8,7 @@ import { logAudit, AUDIT } from "../services/audit.service.js";
 import { recordCustomerPayment } from "../services/customer.service.js";
 import { ensureAppointmentReviewToken, sendAppointmentReviewLink } from "../services/review.service.js";
 import { publicAppUrl } from "../services/whatsapp.service.js";
+import { ensureImageColumnsCapacity } from "../services/databaseMaintenance.service.js";
 
 // …„״§״­״¸״©: req.tenantId ״£״× …† middleware ״§„״¹״²„״ ˆƒ„ ״§״³״×״¹„״§… ‡†״§ …‚‘״¯ ״¨‡.
 
@@ -29,6 +30,9 @@ export const getMyBusiness = asyncHandler(async (req, res) => {
 export const updateMyBusiness = asyncHandler(async (req, res) => {
   const existing = await prisma.business.findUnique({ where: { id: req.tenantId } });
   if (!existing) throw ApiError.notFound("Business not found");
+  if (req.body.logoUrl !== undefined || req.body.bookingHeroImageUrl !== undefined) {
+    await ensureImageColumnsCapacity(prisma);
+  }
 
   const data = {};
   const businessInfoKeys = ["name", "email", "phone", "address", "mapUrl", "logoUrl", "bookingHeroImageUrl", "brandColor", "timezone"];
@@ -385,6 +389,7 @@ export const listServices = asyncHandler(async (req, res) => {
 export const createService = asyncHandler(async (req, res) => {
   const { name, description, imageUrl, durationMinutes, price, serviceHours = [] } = req.body;
   if (!name || !durationMinutes) throw ApiError.badRequest("Service name and duration are required");
+  if (imageUrl !== undefined) await ensureImageColumnsCapacity(prisma);
   const service = await prisma.$transaction(async (tx) => {
     const created = await tx.service.create({
       data: {
@@ -421,6 +426,7 @@ export const updateService = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = await prisma.service.findFirst({ where: { id, businessId: req.tenantId } });
   if (!existing) throw ApiError.notFound("Service not found");
+  if (req.body.imageUrl !== undefined) await ensureImageColumnsCapacity(prisma);
 
   const data = {};
   if (req.body.name !== undefined) data.name = req.body.name;
