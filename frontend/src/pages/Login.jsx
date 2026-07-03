@@ -29,8 +29,8 @@ export default function Login() {
     adminFavicon();
   }, []);
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
     setLoading(true);
     try {
       const user = await login(email, password);
@@ -44,10 +44,11 @@ export default function Login() {
   };
 
   return (
-    <div className="auth-wrap">
+    <div className="auth-wrap" data-no-auto-translate="true">
       <div className="auth-language">
         <LanguageSwitcher />
       </div>
+
       <aside className="auth-aside">
         <div className="brand-logo login-logo">
           <img src="/oh-tech-logo.jpg" alt="O&H Tech" />
@@ -68,14 +69,14 @@ export default function Login() {
 
           <form onSubmit={submit} className="col" style={{ gap: 16 }}>
             <Field label={t("email")}>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
+              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required />
             </Field>
             <Field label={t("password")}>
               <div className="password-input">
                 <Input
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => setPassword(event.target.value)}
                   placeholder="••••••••"
                   required
                 />
