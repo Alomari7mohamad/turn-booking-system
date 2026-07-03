@@ -15,8 +15,8 @@ export function createApp() {
   app.use(securityHeaders);
   app.use(cors({ origin: env.clientUrl, credentials: true }));
   app.use(rateLimit({ name: "api", windowMs: 60 * 1000, max: 240 }));
-  app.use("/api/auth/login", rateLimit({ name: "login", windowMs: 15 * 60 * 1000, max: 10 }));
-  app.use("/api/public", rateLimit({ name: "public", windowMs: 60 * 1000, max: 80 }));
+app.use("/auth/login", rateLimit({ name: "login", windowMs: 15 * 60 * 1000, max: 10 }));
+app.use("/public", rateLimit({ name: "public", windowMs: 60 * 1000, max: 80 }));
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   if (!env.isProd) app.use(morgan("dev"));
