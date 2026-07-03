@@ -21,7 +21,8 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   if (!env.isProd) app.use(morgan("dev"));
 
-  app.use("/api", routes);
+ app.use("/api", routes);
+app.use("/", routes);
 
   // معالجة 404 ثم الأخطاء (يجب أن تكون في النهاية)
   app.use(notFound);
