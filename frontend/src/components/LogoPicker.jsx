@@ -12,47 +12,46 @@ export function readLogoFile(file, onDone, onError, options = {}) {
   }
 
   const maxSize = options.maxSize || 420;
-  const minSize = options.minSize || 360;
+  const minSize = options.minSize || 220;
   const maxBytes = options.maxBytes || 260 * 1024;
   let quality = options.quality || 0.82;
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    const image = new Image();
-    image.onload = () => {
-      let targetSize = maxSize;
-      let dataUrl = "";
+  const image = new Image();
+  const objectUrl = URL.createObjectURL(file);
 
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        const scale = Math.min(1, targetSize / Math.max(image.width, image.height));
-        const width = Math.max(1, Math.round(image.width * scale));
-        const height = Math.max(1, Math.round(image.height * scale));
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.clearRect(0, 0, width, height);
-        ctx.drawImage(image, 0, 0, width, height);
+  image.onload = () => {
+    URL.revokeObjectURL(objectUrl);
+    let targetSize = maxSize;
+    let dataUrl = "";
 
-        dataUrl = canvasToDataUrl(canvas, quality);
-        if (dataUrl.length <= maxBytes || (targetSize <= minSize && quality <= 0.62)) break;
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      const scale = Math.min(1, targetSize / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(image, 0, 0, width, height);
 
-        quality = Math.max(0.62, quality - 0.08);
-        targetSize = Math.max(minSize, Math.round(targetSize * 0.82));
-      }
+      dataUrl = canvasToDataUrl(canvas, quality);
+      if (dataUrl.length <= maxBytes) break;
 
-      if (dataUrl.length > maxBytes * 1.25) {
-        onError?.("الصورة كبيرة جدًا. اختر صورة أصغر أو أقل دقة.");
-        return;
-      }
+      quality = Math.max(0.45, quality - 0.07);
+      targetSize = Math.max(minSize, Math.round(targetSize * 0.82));
 
-      onDone(dataUrl);
-    };
-    image.onerror = () => onError?.("تعذر قراءة الصورة");
-    image.src = reader.result;
+      if (targetSize <= minSize && quality <= 0.45) break;
+    }
+
+    onDone(dataUrl);
   };
-  reader.onerror = () => onError?.("تعذر قراءة الصورة");
-  reader.readAsDataURL(file);
+
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    onError?.("تعذر قراءة الصورة");
+  };
+  image.src = objectUrl;
 }
 
 export function LogoPicker({

@@ -143,7 +143,7 @@ export default function BusinessSettings() {
                     changeText="تغيير الصورة"
                     removeText="إزالة الصورة"
                     previewAlt="صورة صفحة دخول الزبون"
-                    imageOptions={{ maxSize: 980, minSize: 520, quality: 0.78, maxBytes: 560 * 1024 }}
+                    imageOptions={{ maxSize: 1100, minSize: 360, quality: 0.8, maxBytes: 520 * 1024 }}
                   />
                 </Field>
               </div>
