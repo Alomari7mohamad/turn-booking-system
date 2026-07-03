@@ -12,7 +12,7 @@ export function errorHandler(err, _req, res, _next) {
 
   if (err.code === "P2000") {
     statusCode = 413;
-    message = "حجم البيانات المرسلة أكبر من المسموح. يرجى اختيار صورة أصغر أو ضغط الصورة ثم المحاولة مرة أخرى.";
+    message = "حجم البيانات أكبر من المسموح. إذا حدث هذا عند رفع شعار أو صورة، تأكد من تحديث قاعدة البيانات حتى تكون حقول الصور من نوع LongText ثم جرّب صورة أصغر.";
     details = err.meta?.column_name || err.meta;
   } else if (err.code === "P2002") {
     statusCode = 409;

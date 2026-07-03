@@ -13,7 +13,7 @@ export function readLogoFile(file, onDone, onError, options = {}) {
 
   const maxSize = options.maxSize || 420;
   const minSize = options.minSize || 360;
-  const maxBytes = options.maxBytes || 900 * 1024;
+  const maxBytes = options.maxBytes || 260 * 1024;
   let quality = options.quality || 0.82;
 
   const reader = new FileReader();

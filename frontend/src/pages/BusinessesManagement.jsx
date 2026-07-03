@@ -609,7 +609,7 @@ function BusinessFormModal({
               changeText="تغيير الصورة"
               removeText="إزالة الصورة"
               previewAlt="صورة صفحة دخول الزبون"
-              imageOptions={{ maxSize: 1100, minSize: 620, quality: 0.82, maxBytes: 900 * 1024 }}
+              imageOptions={{ maxSize: 980, minSize: 520, quality: 0.78, maxBytes: 560 * 1024 }}
             />
           </Field>
           <Field label="لون المحل"><ColorPicker value={form.brandColor} onChange={(brandColor) => update("brandColor", brandColor)} /></Field>
