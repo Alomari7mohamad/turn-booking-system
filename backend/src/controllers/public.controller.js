@@ -9,6 +9,9 @@ import { generateReference, initiateOnlinePayment } from "../services/paymentSer
 import { assertActiveSubscription } from "../services/subscription.service.js";
 import { logAudit, AUDIT } from "../services/audit.service.js";
 import { normalizeWhatsappPhone, sendWhatsappText } from "../services/whatsapp.service.js";
+import { env } from "../config/env.js";
+import { updateCustomerProfile } from "../services/customer.service.js";
+import { ensureBusinessFeatureColumns, ensureCustomerProfileColumns } from "../services/databaseMaintenance.service.js";
 
 // …״®״·‘״· ״§„״×״­‚‚ …† ״¨״§†״§״× ״§„״­״¬״² ״§„״¹״§… (״±״³״§״¦„ ״¹״±״¨״© ˆ״§״¶״­״©)
 const bookingSchema = z.object({
@@ -22,8 +25,9 @@ const bookingSchema = z.object({
     .min(6, "״±‚… ״§„‡״§״× ״÷״± ״µ״§„״­")
     .max(20, "״±‚… ״§„‡״§״× ״÷״± ״µ״§„״­"),
   customerEmail: z.string().email("״¨״±״¯ ״¥„ƒ״×״±ˆ† ״÷״± ״µ״§„״­").nullish().or(z.literal("")),
+  customerDateOfBirth: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ الميلاد غير صالح").nullish().or(z.literal("")),
   paymentMethod: z.enum(["ONLINE", "PAY_AT_STORE"], { message: "״·״±‚״© ״¯״¹ ״÷״± ״µ״§„״­״©" }).nullish(),
-  phoneVerificationToken: z.string().trim().min(10, "يجب تأكيد رقم الهاتف عبر واتساب"),
+  phoneVerificationToken: z.string().trim().min(10, "يجب تأكيد رقم الهاتف عبر واتساب").nullish(),
   notes: z.string().max(500, "״§„…„״§״­״¸״§״× ״·ˆ„״© ״¬״¯‹״§").nullish(),
 });
 
@@ -43,6 +47,13 @@ const phoneVerificationConfirmSchema = phoneVerificationSchema.extend({
   code: z.string({ required_error: "رمز التحقق مطلوب" }).trim().regex(/^\d{4,8}$/, "رمز التحقق غير صالح"),
 });
 
+const customerProfileSchema = z.object({
+  phone: z.string({ required_error: "رقم الهاتف مطلوب" }).trim().min(6, "رقم الهاتف غير صالح").max(20, "رقم الهاتف غير صالح"),
+  name: z.string().trim().min(2, "الاسم مطلوب").max(100).nullish().or(z.literal("")),
+  email: z.string().email("البريد الإلكتروني غير صالح").nullish().or(z.literal("")),
+  dateOfBirth: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ الميلاد غير صالح").nullish().or(z.literal("")),
+});
+
 function assertLocalMobilePhone(phone) {
   const cleaned = String(phone || "").replace(/[\s-]/g, "");
   if (!/^05\d{8}$/.test(cleaned)) {
@@ -56,6 +67,7 @@ function normalizeRating(value) {
 }
 
 async function resolveBusinessBySlug(slug) {
+  await ensureBusinessFeatureColumns(prisma);
   const business = await prisma.business.findUnique({ where: { slug } });
   if (!business) throw ApiError.notFound("״§„…״­„ ״÷״± …ˆ״¬ˆ״¯");
   if (!business.isActive) throw ApiError.forbidden("‡״°״§ ״§„…״­„ ״÷״± …״×״§״­ ״­״§„‹״§");
@@ -67,6 +79,15 @@ export const sendPhoneVerification = asyncHandler(async (req, res) => {
   const { phone } = validate(phoneVerificationSchema, req.body);
   const localPhone = assertLocalMobilePhone(phone);
   const normalizedPhone = normalizeWhatsappPhone(localPhone);
+
+  if (env.disablePhoneVerification) {
+    return res.json({
+      success: true,
+      verified: true,
+      token: `verification-disabled-${crypto.randomBytes(12).toString("hex")}`,
+      message: "تم تعطيل التحقق مؤقتًا للتجربة. يمكنك المتابعة للحجز.",
+    });
+  }
 
   const code = String(crypto.randomInt(100000, 999999));
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -128,6 +149,7 @@ export const confirmPhoneVerification = asyncHandler(async (req, res) => {
 
 async function assertPhoneVerification({ businessId, phone, token }) {
   const localPhone = assertLocalMobilePhone(phone);
+  if (env.disablePhoneVerification) return null;
   const normalizedPhone = normalizeWhatsappPhone(localPhone);
   const verification = await prisma.phoneVerification.findFirst({
     where: {
@@ -228,7 +250,7 @@ export const createPublicAppointment = asyncHandler(async (req, res) => {
   const business = await resolveBusinessBySlug(req.params.slug);
   // ״×״­‚‚ ״µ״§״±… …† ״§„…״¯״®„״§״×
   const data = validate(bookingSchema, req.body);
-  const { serviceId, employeeId, startAt, customerName, customerPhone, customerEmail, notes, phoneVerificationToken } = data;
+  const { serviceId, employeeId, startAt, customerName, customerPhone, customerEmail, customerDateOfBirth, notes, phoneVerificationToken } = data;
   let { paymentMethod } = data;
 
   // „״§ …ƒ† ״§„״­״¬״² ״¥״°״§ ״§†״×‡‰ ״§״´״×״±״§ƒ ״§„…״­„
@@ -282,6 +304,17 @@ export const createPublicAppointment = asyncHandler(async (req, res) => {
     paymentReference,
     requiresApproval: business.requiresAppointmentApproval,
   });
+
+  if (customerDateOfBirth !== undefined) {
+    await ensureCustomerProfileColumns(prisma);
+    await updateCustomerProfile(prisma, {
+      businessId: business.id,
+      name: customerName,
+      phone: customerPhone,
+      email: customerEmail,
+      dateOfBirth: customerDateOfBirth,
+    });
+  }
 
   await logAudit({
     businessId: business.id,
@@ -356,6 +389,11 @@ export const findAppointmentByPhone = asyncHandler(async (req, res) => {
   if (!customerAppointments.length) {
     return res.json({ success: true, appointment: null, appointments: [], customer: null });
   }
+  await ensureCustomerProfileColumns(prisma);
+  const customer = await prisma.customer.findUnique({
+    where: { businessId_phone: { businessId: business.id, phone: normalizedPhone } },
+    select: { name: true, phone: true, email: true, dateOfBirth: true },
+  }).catch(() => null);
 
   const mapAppointment = (appointment) => ({
     id: appointment.id,
@@ -377,9 +415,35 @@ export const findAppointmentByPhone = asyncHandler(async (req, res) => {
     appointment: mapAppointment(customerAppointments[0]),
     appointments: customerAppointments.map(mapAppointment),
     customer: {
-      name: customerAppointments[0].customerName,
-      phone: customerAppointments[0].customerPhone,
+      name: customer?.name || customerAppointments[0].customerName,
+      phone: customer?.phone || customerAppointments[0].customerPhone,
+      email: customer?.email || "",
+      dateOfBirth: customer?.dateOfBirth ? customer.dateOfBirth.toISOString().slice(0, 10) : "",
     },
+  });
+});
+
+// PATCH /api/public/:slug/customer-profile
+export const updatePublicCustomerProfile = asyncHandler(async (req, res) => {
+  const business = await resolveBusinessBySlug(req.params.slug);
+  const data = validate(customerProfileSchema, req.body);
+  const localPhone = assertLocalMobilePhone(data.phone);
+  await ensureCustomerProfileColumns(prisma);
+  const customer = await updateCustomerProfile(prisma, {
+    businessId: business.id,
+    phone: localPhone,
+    name: data.name,
+    email: data.email,
+    dateOfBirth: data.dateOfBirth,
+  });
+  res.json({
+    success: true,
+    customer: customer ? {
+      name: customer.name,
+      phone: customer.phone,
+      email: customer.email || "",
+      dateOfBirth: customer.dateOfBirth ? customer.dateOfBirth.toISOString().slice(0, 10) : "",
+    } : null,
   });
 });
 

@@ -4,7 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { hashPassword } from "../utils/password.js";
 import { logAudit, AUDIT } from "../services/audit.service.js";
 import { recordCustomerPayment } from "../services/customer.service.js";
-import { ensureImageColumnsCapacity } from "../services/databaseMaintenance.service.js";
+import { ensureBusinessFeatureColumns, ensureImageColumnsCapacity } from "../services/databaseMaintenance.service.js";
 
 function slugify(str) {
   return String(str)
@@ -200,6 +200,7 @@ export const updateManager = asyncHandler(async (req, res) => {
 
 // GET /api/admin/businesses — كل المحلات + عدد الحجوزات + الاشتراك الحالي
 export const listBusinesses = asyncHandler(async (req, res) => {
+  await ensureBusinessFeatureColumns(prisma);
   const search = req.query.search?.trim();
   const businesses = await prisma.business.findMany({
     where: search ? { name: { contains: search } } : undefined,
@@ -245,6 +246,7 @@ export const listBusinesses = asyncHandler(async (req, res) => {
 
 // GET /api/admin/businesses/:id
 export const getBusiness = asyncHandler(async (req, res) => {
+  await ensureBusinessFeatureColumns(prisma);
   const id = Number(req.params.id);
   const business = await prisma.business.findUnique({
     where: { id },
@@ -260,6 +262,7 @@ export const getBusiness = asyncHandler(async (req, res) => {
 
 // POST /api/admin/businesses — إنشاء محل + صاحب المحل + اشتراك
 export const createBusiness = asyncHandler(async (req, res) => {
+  await ensureBusinessFeatureColumns(prisma);
   const {
     name,
     slug,
@@ -364,6 +367,7 @@ export const createBusiness = asyncHandler(async (req, res) => {
 
 // PATCH /api/admin/businesses/:id — تعديل بيانات المحل
 export const updateBusiness = asyncHandler(async (req, res) => {
+  await ensureBusinessFeatureColumns(prisma);
   const id = Number(req.params.id);
   const {
     name,

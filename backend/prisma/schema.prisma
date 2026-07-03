@@ -72,6 +72,7 @@ model Customer {
   name       String
   phone      String
   email      String?
+  dateOfBirth DateTime? @map("date_of_birth")
   totalVisits Int     @default(0) @map("total_visits")
   monthlyVisits Int   @default(0) @map("monthly_visits")
   totalPaid  Float    @default(0) @map("total_paid")

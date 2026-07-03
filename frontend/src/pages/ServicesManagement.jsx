@@ -86,6 +86,7 @@ export default function ServicesManagement() {
   };
 
   const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
+
   const updateHour = (dayOfWeek, patch) => {
     setForm((current) => ({
       ...current,
@@ -136,7 +137,7 @@ export default function ServicesManagement() {
       <div className="page-head">
         <div>
           <div className="page-title">الخدمات</div>
-          <div className="page-sub">حدد الخدمات ومدتها وسعرها وساعات الحجز الخاصة بها</div>
+          <div className="page-sub">حدد الخدمات ومدتها وسعرها وملاحظاتها وساعات الحجز الخاصة بها</div>
         </div>
         <Button onClick={openCreate}>+ خدمة جديدة</Button>
       </div>
@@ -191,7 +192,13 @@ export default function ServicesManagement() {
               previewAlt="صورة الخدمة"
             />
           </Field>
-          <Field label="الوصف (اختياري)"><Textarea value={form.description} onChange={set("description")} /></Field>
+          <Field label="ملاحظات تظهر للزبون (اختياري)">
+            <Textarea
+              value={form.description}
+              onChange={set("description")}
+              placeholder="مثال: يرجى الوصول قبل الموعد بعشر دقائق، أو إحضار مستند معين."
+            />
+          </Field>
           <div className="grid grid-2">
             <Field label="المدة (دقيقة)"><Input type="number" min="5" step="5" value={form.durationMinutes} onChange={set("durationMinutes")} required /></Field>
             <Field label="السعر (₪)"><Input type="number" min="0" value={form.price} onChange={set("price")} /></Field>

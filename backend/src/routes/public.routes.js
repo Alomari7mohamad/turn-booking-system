@@ -4,6 +4,7 @@ import {
   getPublicAvailability,
   createPublicAppointment,
   findAppointmentByPhone,
+  updatePublicCustomerProfile,
   cancelPublicAppointment,
   getPrintTicket,
   respondToDelay,
@@ -23,6 +24,7 @@ router.post("/reviews/:token", submitPublicReview);
 router.get("/:slug", getPublicBusiness);
 router.get("/:slug/availability", getPublicAvailability);
 router.get("/:slug/appointments/by-phone", findAppointmentByPhone);
+router.patch("/:slug/customer-profile", updatePublicCustomerProfile);
 router.get("/:slug/print-ticket", getPrintTicket);
 router.post("/:slug/phone-verifications", sendPhoneVerification);
 router.post("/:slug/phone-verifications/confirm", confirmPhoneVerification);

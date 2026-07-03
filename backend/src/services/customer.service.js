@@ -8,6 +8,12 @@ function monthBounds(date = new Date()) {
   return { start, end };
 }
 
+function parseDateOfBirth(value) {
+  if (!value) return null;
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 async function customerHubEnabled(client, businessId) {
   const business = await client.business.findUnique({
     where: { id: businessId },
@@ -16,7 +22,7 @@ async function customerHubEnabled(client, businessId) {
   return Boolean(business?.customerHubEnabled);
 }
 
-export async function recordCustomerBooking(client, appointment) {
+export async function recordCustomerBooking(client, appointment, profile = {}) {
   const phone = normalizePhone(appointment.customerPhone);
   if (!phone) return null;
   if (!(await customerHubEnabled(client, appointment.businessId))) return null;
@@ -24,6 +30,7 @@ export async function recordCustomerBooking(client, appointment) {
   const visitDate = appointment.startAt ? new Date(appointment.startAt) : new Date();
   const { start, end } = monthBounds(new Date());
   const isCurrentMonth = visitDate >= start && visitDate < end;
+  const dateOfBirth = parseDateOfBirth(profile.dateOfBirth);
 
   return client.customer.upsert({
     where: { businessId_phone: { businessId: appointment.businessId, phone } },
@@ -32,6 +39,7 @@ export async function recordCustomerBooking(client, appointment) {
       name: appointment.customerName || phone,
       phone,
       email: appointment.customerEmail || null,
+      ...(dateOfBirth ? { dateOfBirth } : {}),
       totalVisits: 1,
       monthlyVisits: isCurrentMonth ? 1 : 0,
       lastVisitAt: visitDate,
@@ -39,9 +47,33 @@ export async function recordCustomerBooking(client, appointment) {
     update: {
       name: appointment.customerName || phone,
       email: appointment.customerEmail || null,
+      ...(dateOfBirth ? { dateOfBirth } : {}),
       totalVisits: { increment: 1 },
       ...(isCurrentMonth ? { monthlyVisits: { increment: 1 } } : {}),
       lastVisitAt: visitDate,
+    },
+  });
+}
+
+export async function updateCustomerProfile(client, { businessId, name, phone, email, dateOfBirth }) {
+  const normalizedPhone = normalizePhone(phone);
+  if (!businessId || !normalizedPhone) return null;
+  if (!(await customerHubEnabled(client, businessId))) return null;
+
+  const parsedDateOfBirth = parseDateOfBirth(dateOfBirth);
+  return client.customer.upsert({
+    where: { businessId_phone: { businessId, phone: normalizedPhone } },
+    create: {
+      businessId,
+      name: name || normalizedPhone,
+      phone: normalizedPhone,
+      email: email || null,
+      ...(parsedDateOfBirth ? { dateOfBirth: parsedDateOfBirth } : {}),
+    },
+    update: {
+      ...(name !== undefined ? { name: name || normalizedPhone } : {}),
+      ...(email !== undefined ? { email: email || null } : {}),
+      ...(dateOfBirth !== undefined ? { dateOfBirth: parsedDateOfBirth } : {}),
     },
   });
 }

@@ -2,6 +2,7 @@
 import { useParams } from "react-router-dom";
 import { publicApi } from "../api/endpoints.js";
 import { setFavicon } from "../favicon.js";
+import { AppFooter } from "../components/AppFooter.jsx";
 import { LanguageSwitcher } from "../components/GlobalControls.jsx";
 import { Button, EmptyState, Field, Input, Select, Spinner, fmtDate, fmtPrice, fmtTime } from "../components/ui.jsx";
 import { applyBrandTheme, buildBrandThemeVars, resetBrandTheme } from "../brandTheme.js";
@@ -31,6 +32,13 @@ function buildWazeUrl(value) {
   if (!raw) return null;
   if (/waze\.com|ul\.waze\.com/i.test(raw)) return raw;
   return `https://waze.com/ul?q=${encodeURIComponent(raw)}&navigate=yes`;
+}
+
+function buildWhatsappUrl(value) {
+  const raw = String(value || "").replace(/\D/g, "");
+  if (!raw) return null;
+  const phone = raw.startsWith("972") ? raw : raw.startsWith("0") ? `972${raw.slice(1)}` : raw;
+  return `https://wa.me/${phone}?text=${encodeURIComponent("مرحبا , اريد مساعدة")}`;
 }
 
 function calendarDays(monthDate) {
@@ -67,6 +75,7 @@ export default function PublicBooking() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [loginMessage, setLoginMessage] = useState("");
+  const [settingsMessage, setSettingsMessage] = useState("");
   const [devCode, setDevCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
   const [sendingCode, setSendingCode] = useState(false);
@@ -84,7 +93,7 @@ export default function PublicBooking() {
   const [slots, setSlots] = useState(null);
   const [slot, setSlot] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState(null);
-  const [customerForm, setCustomerForm] = useState({ name: "", email: "" });
+  const [customerForm, setCustomerForm] = useState({ name: "", email: "", dateOfBirth: "" });
   const [booking, setBooking] = useState(false);
   const [bookErr, setBookErr] = useState("");
   const [success, setSuccess] = useState(null);
@@ -111,6 +120,7 @@ export default function PublicBooking() {
   const hasLoginImage = Boolean(business?.bookingHeroImageUrl);
   const loginCardStyle = hasLoginImage ? { "--booking-card-bg": `url("${business.bookingHeroImageUrl}")` } : undefined;
   const wazeUrl = buildWazeUrl(business?.mapUrl || business?.address);
+  const whatsappUrl = buildWhatsappUrl(business?.phone);
   const serviceEmployees = service ? employees.filter((item) => item.serviceIds.includes(service.id)) : [];
   const methods = useMemo(() => {
     const result = [];
@@ -126,7 +136,12 @@ export default function PublicBooking() {
     setAppointments(res.appointments || []);
     if (res.customer?.name) {
       setSession((current) => current ? { ...current, name: res.customer.name } : current);
-      setCustomerForm((current) => ({ ...current, name: res.customer.name }));
+      setCustomerForm((current) => ({
+        ...current,
+        name: res.customer.name || current.name,
+        email: res.customer.email || current.email,
+        dateOfBirth: res.customer.dateOfBirth || current.dateOfBirth,
+      }));
     }
   };
 
@@ -144,6 +159,13 @@ export default function PublicBooking() {
     setCode("");
     try {
       const res = await publicApi.sendPhoneVerification(slug, phone);
+      if (res.verified && res.token) {
+        const nextSession = { phone, token: res.token, name: "", email: "" };
+        setSession(nextSession);
+        setCustomerForm({ name: "", email: "", dateOfBirth: "" });
+        await refreshAppointments(phone);
+        return;
+      }
       setLoginMessage(res.message || "تم إرسال رمز التحقق عبر واتساب");
       setDevCode(res.devCode || "");
       setCodeSent(true);
@@ -166,7 +188,7 @@ export default function PublicBooking() {
       const res = await publicApi.confirmPhoneVerification(slug, { phone, code });
       const nextSession = { phone, token: res.token, name: "", email: "" };
       setSession(nextSession);
-      setCustomerForm({ name: "", email: "" });
+      setCustomerForm({ name: "", email: "", dateOfBirth: "" });
       await refreshAppointments(phone);
     } catch (err) {
       setLoginMessage(err.message);
@@ -262,6 +284,7 @@ export default function PublicBooking() {
         customerName: name,
         customerPhone: session.phone,
         customerEmail: customerForm.email || session.email || "",
+        customerDateOfBirth: customerForm.dateOfBirth || "",
         paymentMethod: isFree ? "PAY_AT_STORE" : paymentMethod,
         phoneVerificationToken: session.token,
       });
@@ -271,7 +294,7 @@ export default function PublicBooking() {
       }
       const appointment = { ...res.appointment, business: business.name };
       setSuccess(appointment);
-      setSession((current) => ({ ...current, name, email: customerForm.email || "" }));
+      setSession((current) => ({ ...current, name, email: customerForm.email || "", dateOfBirth: customerForm.dateOfBirth || "" }));
       setActiveTab("new");
       setStep("success");
       await refreshAppointments(session.phone);
@@ -290,6 +313,34 @@ export default function PublicBooking() {
       await refreshAppointments(session.phone);
     } finally {
       setCancelingId(null);
+    }
+  };
+
+  const saveCustomerSettings = async () => {
+    setSettingsMessage("");
+    try {
+      const res = await publicApi.updateCustomerProfile(slug, {
+        phone: session.phone,
+        name: customerForm.name,
+        email: customerForm.email,
+        dateOfBirth: customerForm.dateOfBirth,
+      });
+      const customer = res.customer || {};
+      setCustomerForm((current) => ({
+        ...current,
+        name: customer.name || current.name,
+        email: customer.email || current.email,
+        dateOfBirth: customer.dateOfBirth || current.dateOfBirth,
+      }));
+      setSession((current) => ({
+        ...current,
+        name: customer.name || customerForm.name,
+        email: customer.email || customerForm.email,
+        dateOfBirth: customer.dateOfBirth || customerForm.dateOfBirth,
+      }));
+      setSettingsMessage("تم حفظ التفاصيل");
+    } catch (err) {
+      setSettingsMessage(err.message);
     }
   };
 
@@ -364,6 +415,7 @@ export default function PublicBooking() {
             )}
           </div>
         </div>
+        <AppFooter />
       </div>
     );
   }
@@ -381,11 +433,6 @@ export default function PublicBooking() {
 
         {activeTab === "home" && (
           <main className="booking-app-content">
-            <section className="booking-home-hero">
-              <h2>من هنا تبدأ راحتك</h2>
-              <p>احجز، تابع مواعيدك، وألغِ الموعد القادم عند الحاجة.</p>
-              <Button size="lg" onClick={resetNewBooking}>احجز الآن</Button>
-            </section>
             <section className="booking-panel">
               <h3>موعدك القادم</h3>
               {appointments[0] ? <AppointmentCard appointment={appointments[0]} onCancel={cancelAppointment} canceling={cancelingId === appointments[0].id} /> : <EmptyState title="لا يوجد موعد قادم" hint="احجز موعدك الأول الآن." />}
@@ -415,7 +462,11 @@ export default function PublicBooking() {
               <Field label="البريد الإلكتروني">
                 <Input value={customerForm.email} onChange={(event) => setCustomerForm((current) => ({ ...current, email: event.target.value }))} />
               </Field>
-              <Button onClick={() => setSession((current) => ({ ...current, name: customerForm.name, email: customerForm.email }))}>حفظ التفاصيل</Button>
+              <Field label="تاريخ الميلاد">
+                <Input type="date" value={customerForm.dateOfBirth} onChange={(event) => setCustomerForm((current) => ({ ...current, dateOfBirth: event.target.value }))} />
+              </Field>
+              {settingsMessage && <div className="booking-login-message">{settingsMessage}</div>}
+              <Button onClick={saveCustomerSettings}>حفظ التفاصيل</Button>
             </div>
           </main>
         )}
@@ -437,6 +488,7 @@ export default function PublicBooking() {
                     <button key={item.id} className="booking-service-card" onClick={() => chooseService(item)}>
                       {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <span>{serviceIcon(item.name)}</span>}
                       <strong>{item.name}</strong>
+                      {item.description && <p className="booking-service-note">{item.description}</p>}
                       <small>{item.durationMinutes} دقيقة - {Number(item.price || 0) === 0 ? "مجانية" : fmtPrice(item.price)}</small>
                     </button>
                   ))}
@@ -537,10 +589,11 @@ export default function PublicBooking() {
         )}
 
         <nav className="booking-bottom-nav">
-          <button className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}><span>⌂</span>الرئيسية</button>
-          <button className={activeTab === "appointments" ? "active" : ""} onClick={() => { refreshAppointments(); setActiveTab("appointments"); }}><span>□</span>مواعيدي</button>
+          <button className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}><span className="booking-nav-icon booking-home-icon" aria-hidden="true" />الرئيسية</button>
+          <button className={activeTab === "appointments" ? "active" : ""} onClick={() => { refreshAppointments(); setActiveTab("appointments"); }}><span className="booking-nav-icon booking-queue-icon" aria-hidden="true" />مواعيدي</button>
           <button className="book-now" onClick={resetNewBooking}><b>+</b><span>احجز الآن</span></button>
-          <button className={activeTab === "settings" ? "active" : ""} onClick={() => setActiveTab("settings")}><span>⚙</span>الإعدادات</button>
+          <a className="booking-whatsapp-nav" href={whatsappUrl || "#"} target={whatsappUrl ? "_blank" : undefined} rel="noreferrer" aria-disabled={!whatsappUrl} onClick={(event) => { if (!whatsappUrl) event.preventDefault(); }}><span className="booking-nav-icon booking-whatsapp-icon" aria-hidden="true" />واتساب</a>
+          <button className={activeTab === "settings" ? "active" : ""} onClick={() => setActiveTab("settings")}><span className="booking-nav-icon booking-settings-icon" aria-hidden="true" />الإعدادات</button>
         </nav>
       </div>
       {wazeUrl && <a className="waze-floating-button" href={wazeUrl} target="_blank" rel="noreferrer" aria-label="Waze"><img src="/waze.jpg" alt="" /></a>}

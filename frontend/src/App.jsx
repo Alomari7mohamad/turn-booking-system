@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./context/AuthContext.jsx";
 import { ProtectedRoute } from "./components/ProtectedRoute.jsx";
 import { Spinner } from "./components/ui.jsx";
@@ -49,6 +49,9 @@ function RoleHome() {
 }
 
 export default function App() {
+  const location = useLocation();
+  const isPublicBooking = location.pathname.startsWith("/book/");
+
   return (
     <>
       <GlobalControls />
@@ -137,7 +140,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <AppFooter />
+      {!isPublicBooking && <AppFooter />}
     </>
   );
 }

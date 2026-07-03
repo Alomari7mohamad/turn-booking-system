@@ -20,4 +20,5 @@ export const env = {
   // الدفع: اسم البوابة المستخدمة (mock افتراضيًا) + سر التحقق من الـ webhook
   paymentProvider: process.env.PAYMENT_PROVIDER || "mock",
   paymentWebhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || "dev-webhook-secret",
+  disablePhoneVerification: process.env.DISABLE_PHONE_VERIFICATION !== "false",
 };
