@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { adminApi } from "../api/endpoints.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
@@ -28,10 +28,10 @@ export default function SuperAdminDashboard() {
       </div>
 
       <div className="grid grid-stats">
-        <StatCard icon="🏢" value={fmtNumber(s.businesses)} label={t("totalBusinesses")} tone="primary" />
+        <StatCard icon="▣" value={fmtNumber(s.businesses)} label={t("totalBusinesses")} tone="primary" />
         <StatCard icon="✓" value={fmtNumber(s.activeBusinesses)} label={t("activeBusinesses")} tone="success" />
-        <StatCard icon="📅" value={fmtNumber(s.appointments)} label={t("totalAppointments")} tone="info" />
-        <StatCard icon="👥" value={fmtNumber(s.owners)} label={t("businessOwners")} tone="warning" />
+        <StatCard icon="□" value={fmtNumber(s.appointments)} label={t("totalAppointments")} tone="info" />
+        <StatCard icon="◉" value={fmtNumber(s.owners)} label={t("businessOwners")} tone="warning" />
       </div>
 
       <div className="card mt-3">
@@ -69,9 +69,10 @@ export default function SuperAdminDashboard() {
             </table>
           </div>
         ) : (
-          <EmptyState icon="🏢" title={t("noBusinessesYet")} hint={t("addFirstBusinessHint")} />
+          <EmptyState icon="▣" title={t("noBusinessesYet")} hint={t("addFirstBusinessHint")} />
         )}
       </div>
     </>
   );
 }
+

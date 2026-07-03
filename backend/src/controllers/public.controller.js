@@ -1,3 +1,4 @@
+﻿import crypto from "crypto";
 import { z } from "zod";
 import { prisma } from "../config/db.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -7,39 +8,150 @@ import { getAvailability, createAppointmentSafe, getBusinessClosureInfo } from "
 import { generateReference, initiateOnlinePayment } from "../services/paymentService.js";
 import { assertActiveSubscription } from "../services/subscription.service.js";
 import { logAudit, AUDIT } from "../services/audit.service.js";
+import { normalizeWhatsappPhone, sendWhatsappText } from "../services/whatsapp.service.js";
 
-// مخطّط التحقق من بيانات الحجز العام (رسائل عربية واضحة)
+// …״®״·‘״· ״§„״×״­‚‚ …† ״¨״§†״§״× ״§„״­״¬״² ״§„״¹״§… (״±״³״§״¦„ ״¹״±״¨״© ˆ״§״¶״­״©)
 const bookingSchema = z.object({
-  serviceId: z.coerce.number({ invalid_type_error: "الخدمة مطلوبة" }).int().positive("الخدمة مطلوبة"),
-  employeeId: z.coerce.number().int().positive().nullish(), // اختياري = أي موظف متاح
-  startAt: z.string({ required_error: "التاريخ والوقت مطلوبان" }).min(1, "التاريخ والوقت مطلوبان"),
-  customerName: z.string({ required_error: "الاسم مطلوب" }).trim().min(2, "الاسم مطلوب"),
+  serviceId: z.coerce.number({ invalid_type_error: "״§„״®״¯…״© …״·„ˆ״¨״©" }).int().positive("״§„״®״¯…״© …״·„ˆ״¨״©"),
+  employeeId: z.coerce.number().int().positive().nullish(), // ״§״®״×״§״± = ״£ …ˆ״¸ …״×״§״­
+  startAt: z.string({ required_error: "״§„״×״§״±״® ˆ״§„ˆ‚״× …״·„ˆ״¨״§†" }).min(1, "״§„״×״§״±״® ˆ״§„ˆ‚״× …״·„ˆ״¨״§†"),
+  customerName: z.string({ required_error: "״§„״§״³… …״·„ˆ״¨" }).trim().min(2, "״§„״§״³… …״·„ˆ״¨"),
   customerPhone: z
-    .string({ required_error: "رقم الهاتف مطلوب" })
+    .string({ required_error: "״±‚… ״§„‡״§״× …״·„ˆ״¨" })
     .trim()
-    .min(6, "رقم الهاتف غير صالح")
-    .max(20, "رقم الهاتف غير صالح"),
-  customerEmail: z.string().email("بريد إلكتروني غير صالح").nullish().or(z.literal("")),
-  paymentMethod: z.enum(["ONLINE", "PAY_AT_STORE"], { message: "طريقة دفع غير صالحة" }).nullish(),
-  notes: z.string().max(500, "الملاحظات طويلة جدًا").nullish(),
+    .min(6, "״±‚… ״§„‡״§״× ״÷״± ״µ״§„״­")
+    .max(20, "״±‚… ״§„‡״§״× ״÷״± ״µ״§„״­"),
+  customerEmail: z.string().email("״¨״±״¯ ״¥„ƒ״×״±ˆ† ״÷״± ״µ״§„״­").nullish().or(z.literal("")),
+  paymentMethod: z.enum(["ONLINE", "PAY_AT_STORE"], { message: "״·״±‚״© ״¯״¹ ״÷״± ״µ״§„״­״©" }).nullish(),
+  phoneVerificationToken: z.string().trim().min(10, "يجب تأكيد رقم الهاتف عبر واتساب"),
+  notes: z.string().max(500, "״§„…„״§״­״¸״§״× ״·ˆ„״© ״¬״¯‹״§").nullish(),
 });
 
-// يحوّل slug إلى محل مفعّل، ويضع businessId في req. (عزل للمسارات العامة)
+// ״­ˆ‘„ slug ״¥„‰ …״­„ …״¹‘„״ ˆ״¶״¹ businessId  req. (״¹״²„ „„…״³״§״±״§״× ״§„״¹״§…״©)
+const reviewSchema = z.object({
+  serviceRating: z.coerce.number().min(0.5).max(5),
+  employeeRating: z.coerce.number().min(0.5).max(5),
+  businessRating: z.coerce.number().min(0.5).max(5),
+  comment: z.string().max(1000).nullish().or(z.literal("")),
+});
+
+const phoneVerificationSchema = z.object({
+  phone: z.string({ required_error: "رقم الهاتف مطلوب" }).trim().min(6, "رقم الهاتف غير صالح").max(20, "رقم الهاتف غير صالح"),
+});
+
+const phoneVerificationConfirmSchema = phoneVerificationSchema.extend({
+  code: z.string({ required_error: "رمز التحقق مطلوب" }).trim().regex(/^\d{4,8}$/, "رمز التحقق غير صالح"),
+});
+
+function assertLocalMobilePhone(phone) {
+  const cleaned = String(phone || "").replace(/[\s-]/g, "");
+  if (!/^05\d{8}$/.test(cleaned)) {
+    throw ApiError.badRequest("الرقم خاطئ");
+  }
+  return cleaned;
+}
+
+function normalizeRating(value) {
+  return Math.round(Number(value) * 2) / 2;
+}
+
 async function resolveBusinessBySlug(slug) {
   const business = await prisma.business.findUnique({ where: { slug } });
-  if (!business) throw ApiError.notFound("المحل غير موجود");
-  if (!business.isActive) throw ApiError.forbidden("هذا المحل غير متاح حاليًا");
+  if (!business) throw ApiError.notFound("״§„…״­„ ״÷״± …ˆ״¬ˆ״¯");
+  if (!business.isActive) throw ApiError.forbidden("‡״°״§ ״§„…״­„ ״÷״± …״×״§״­ ״­״§„‹״§");
   return business;
 }
 
-// GET /api/public/:slug — معلومات المحل + الخدمات + الموظفون
+export const sendPhoneVerification = asyncHandler(async (req, res) => {
+  const business = await resolveBusinessBySlug(req.params.slug);
+  const { phone } = validate(phoneVerificationSchema, req.body);
+  const localPhone = assertLocalMobilePhone(phone);
+  const normalizedPhone = normalizeWhatsappPhone(localPhone);
+
+  const code = String(crypto.randomInt(100000, 999999));
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await prisma.phoneVerification.create({
+    data: {
+      businessId: business.id,
+      phone: normalizedPhone,
+      code,
+      expiresAt,
+    },
+  });
+
+  const whatsapp = await sendWhatsappText({
+    to: normalizedPhone,
+    message: `رمز التحقق لحجز دور في ${business.name}: ${code}\nالرمز صالح لمدة 10 دقائق.`,
+  });
+
+  res.json({
+    success: true,
+    whatsapp,
+    devCode: process.env.NODE_ENV === "production" ? undefined : code,
+    message: whatsapp.sent ? "تم إرسال رمز التحقق عبر واتساب" : "تم إنشاء رمز التحقق. فعّل واتساب الرسمي للإرسال التلقائي.",
+  });
+});
+
+export const confirmPhoneVerification = asyncHandler(async (req, res) => {
+  const business = await resolveBusinessBySlug(req.params.slug);
+  const { phone, code } = validate(phoneVerificationConfirmSchema, req.body);
+  const localPhone = assertLocalMobilePhone(phone);
+  const normalizedPhone = normalizeWhatsappPhone(localPhone);
+  const verification = await prisma.phoneVerification.findFirst({
+    where: {
+      businessId: business.id,
+      phone: normalizedPhone,
+      purpose: "BOOKING",
+      usedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!verification) throw ApiError.badRequest("رمز التحقق غير صالح أو انتهت صلاحيته");
+  if (verification.attempts >= 5) throw ApiError.badRequest("تم تجاوز عدد المحاولات المسموح");
+  if (verification.code !== code) {
+    await prisma.phoneVerification.update({
+      where: { id: verification.id },
+      data: { attempts: { increment: 1 } },
+    });
+    throw ApiError.badRequest("رمز التحقق غير صحيح");
+  }
+
+  const token = crypto.randomBytes(24).toString("base64url");
+  await prisma.phoneVerification.update({
+    where: { id: verification.id },
+    data: { token, verifiedAt: new Date() },
+  });
+  res.json({ success: true, verified: true, token });
+});
+
+async function assertPhoneVerification({ businessId, phone, token }) {
+  const localPhone = assertLocalMobilePhone(phone);
+  const normalizedPhone = normalizeWhatsappPhone(localPhone);
+  const verification = await prisma.phoneVerification.findFirst({
+    where: {
+      businessId,
+      phone: normalizedPhone,
+      token,
+      purpose: "BOOKING",
+      usedAt: null,
+      verifiedAt: { not: null },
+      expiresAt: { gt: new Date() },
+    },
+  });
+  if (!verification) throw ApiError.badRequest("يجب تأكيد رقم الهاتف عبر واتساب قبل الحجز");
+  return verification;
+}
+
+// GET /api/public/:slug ג€” …״¹„ˆ…״§״× ״§„…״­„ + ״§„״®״¯…״§״× + ״§„…ˆ״¸ˆ†
 export const getPublicBusiness = asyncHandler(async (req, res) => {
   const business = await resolveBusinessBySlug(req.params.slug);
 
   const [services, employees] = await Promise.all([
     prisma.service.findMany({
       where: { businessId: business.id, isActive: true },
-      select: { id: true, name: true, description: true, durationMinutes: true, price: true },
+      select: { id: true, name: true, description: true, imageUrl: true, durationMinutes: true, price: true },
       orderBy: { name: "asc" },
     }),
     prisma.employee.findMany({
@@ -57,10 +169,15 @@ export const getPublicBusiness = asyncHandler(async (req, res) => {
       slug: business.slug,
       phone: business.phone,
       address: business.address,
+      mapUrl: business.mapUrl,
       logoUrl: business.logoUrl,
+      bookingHeroImageUrl: business.bookingHeroImageUrl,
       brandColor: business.brandColor,
       onlinePaymentEnabled: business.onlinePaymentEnabled,
       payAtStoreEnabled: business.payAtStoreEnabled,
+      requiresAppointmentApproval: business.requiresAppointmentApproval,
+      printScreenEnabled: business.printScreenEnabled,
+      reviewsEnabled: business.reviewsEnabled,
     },
     services,
     employees: employees.map((e) => ({
@@ -76,7 +193,7 @@ export const getPublicBusiness = asyncHandler(async (req, res) => {
 export const getPublicAvailability = asyncHandler(async (req, res) => {
   const business = await resolveBusinessBySlug(req.params.slug);
   const { serviceId, employeeId, date } = req.query;
-  if (!serviceId) throw ApiError.badRequest("اختر الخدمة أولًا");
+  if (!serviceId) throw ApiError.badRequest("״§״®״×״± ״§„״®״¯…״© ״£ˆ„‹״§");
 
   const closure = await getBusinessClosureInfo({ businessId: business.id, date });
   if (closure) {
@@ -106,35 +223,36 @@ export const getPublicAvailability = asyncHandler(async (req, res) => {
   });
 });
 
-// POST /api/public/:slug/appointments — إنشاء حجز بدون تسجيل دخول
+// POST /api/public/:slug/appointments ג€” ״¥†״´״§״¡ ״­״¬״² ״¨״¯ˆ† ״×״³״¬„ ״¯״®ˆ„
 export const createPublicAppointment = asyncHandler(async (req, res) => {
   const business = await resolveBusinessBySlug(req.params.slug);
-  // تحقق صارم من المدخلات
+  // ״×״­‚‚ ״µ״§״±… …† ״§„…״¯״®„״§״×
   const data = validate(bookingSchema, req.body);
-  const { serviceId, employeeId, startAt, customerName, customerPhone, customerEmail, notes } = data;
+  const { serviceId, employeeId, startAt, customerName, customerPhone, customerEmail, notes, phoneVerificationToken } = data;
   let { paymentMethod } = data;
 
-  // لا يمكن الحجز إذا انتهى اشتراك المحل
+  // „״§ …ƒ† ״§„״­״¬״² ״¥״°״§ ״§†״×‡‰ ״§״´״×״±״§ƒ ״§„…״­„
   await assertActiveSubscription(business.id);
+  await assertPhoneVerification({ businessId: business.id, phone: customerPhone, token: phoneVerificationToken });
 
-  // ===== تحديد طريقة الدفع وفق إعدادات المحل =====
+  // ===== ״×״­״¯״¯ ״·״±‚״© ״§„״¯״¹ ˆ‚ ״¥״¹״¯״§״¯״§״× ״§„…״­„ =====
   const methods = [];
   if (business.onlinePaymentEnabled) methods.push("ONLINE");
   if (business.payAtStoreEnabled) methods.push("PAY_AT_STORE");
 
   if (methods.length === 0) {
-    throw ApiError.badRequest("الحجز غير متاح حاليًا: لم يفعّل المحل أي طريقة دفع");
+    throw ApiError.badRequest("״§„״­״¬״² ״÷״± …״×״§״­ ״­״§„‹״§: „… ״¹‘„ ״§„…״­„ ״£ ״·״±‚״© ״¯״¹");
   }
   if (!paymentMethod) {
-    // طريقة واحدة فقط مفعّلة => تُختار تلقائيًا
+    // ״·״±‚״© ˆ״§״­״¯״© ‚״· …״¹‘„״© => ״×״®״×״§״± ״×„‚״§״¦‹״§
     if (methods.length === 1) paymentMethod = methods[0];
-    else throw ApiError.badRequest("يرجى اختيار طريقة الدفع");
+    else throw ApiError.badRequest("״±״¬‰ ״§״®״×״§״± ״·״±‚״© ״§„״¯״¹");
   }
   if (!methods.includes(paymentMethod)) {
-    throw ApiError.badRequest("طريقة الدفع المختارة غير متاحة لدى هذا المحل");
+    throw ApiError.badRequest("״·״±‚״© ״§„״¯״¹ ״§„…״®״×״§״±״© ״÷״± …״×״§״­״© „״¯‰ ‡״°״§ ״§„…״­„");
   }
 
-  // إن لم يُختر موظف، نختار أول موظف متاح في ذلك الوقت
+  // ״¥† „… ״®״×״± …ˆ״¸״ †״®״×״§״± ״£ˆ„ …ˆ״¸ …״×״§״­  ״°„ƒ ״§„ˆ‚״×
   let finalEmployeeId = employeeId;
   if (!finalEmployeeId) {
     const date = new Date(startAt).toISOString().slice(0, 10);
@@ -145,7 +263,7 @@ export const createPublicAppointment = asyncHandler(async (req, res) => {
       date,
     });
     const match = slots.find((s) => new Date(s.startAt).getTime() === new Date(startAt).getTime());
-    if (!match) throw ApiError.conflict("لم يعد هذا الوقت متاحًا");
+    if (!match) throw ApiError.conflict("„… ״¹״¯ ‡״°״§ ״§„ˆ‚״× …״×״§״­‹״§");
     finalEmployeeId = match.employeeId;
   }
 
@@ -180,13 +298,15 @@ export const createPublicAppointment = asyncHandler(async (req, res) => {
     endAt: appointment.endAt,
     service: appointment.service.name,
     employee: appointment.employee.name,
+    customerName: appointment.customerName,
+    customerPhone: appointment.customerPhone,
     status: appointment.status,
     paymentMethod: appointment.paymentMethod,
     paymentStatus: appointment.paymentStatus,
     paymentAmount: appointment.paymentAmount,
   };
 
-  // الدفع الإلكتروني: ننشئ جلسة دفع ونعيد رابط البوابة لتوجيه الزبون.
+  // ״§„״¯״¹ ״§„״¥„ƒ״×״±ˆ†: ††״´״¦ ״¬„״³״© ״¯״¹ ˆ†״¹״¯ ״±״§״¨״· ״§„״¨ˆ״§״¨״© „״×ˆ״¬‡ ״§„״²״¨ˆ†.
   if (paymentMethod === "ONLINE") {
     const { paymentUrl } = await initiateOnlinePayment(appointment);
     return res.status(201).json({
@@ -194,17 +314,244 @@ export const createPublicAppointment = asyncHandler(async (req, res) => {
       requiresPayment: true,
       paymentUrl,
       reference: paymentReference,
-      message: "يرجى إتمام الدفع لتأكيد الحجز",
+      message: "״±״¬‰ ״¥״×…״§… ״§„״¯״¹ „״×״£ƒ״¯ ״§„״­״¬״²",
       appointment: base,
     });
   }
 
-  // الدفع في المحل: الحجز مؤكَّد مباشرة.
+  // ״§„״¯״¹  ״§„…״­„: ״§„״­״¬״² …״₪ƒ‘״¯ …״¨״§״´״±״©.
   res.status(201).json({
     success: true,
     requiresPayment: false,
-    message: "تم تأكيد الحجز بنجاح",
+    message: "״×… ״×״£ƒ״¯ ״§„״­״¬״² ״¨†״¬״§״­",
     appointment: base,
+  });
+});
+
+// GET /api/public/:slug/appointments/by-phone?phone=
+export const findAppointmentByPhone = asyncHandler(async (req, res) => {
+  const business = await resolveBusinessBySlug(req.params.slug);
+  const phone = String(req.query.phone || "").trim();
+  const normalizedPhone = phone.replace(/\D/g, "");
+
+  if (normalizedPhone.length < 6) {
+    throw ApiError.badRequest("״±‚… ״§„‡״§״× ״÷״± ״µ״§„״­");
+  }
+
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      businessId: business.id,
+      status: "CONFIRMED",
+      startAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+    },
+    include: {
+      service: { select: { name: true } },
+      employee: { select: { name: true } },
+    },
+    orderBy: { startAt: "asc" },
+    take: 200,
+  });
+
+  const customerAppointments = appointments.filter((item) => item.customerPhone.replace(/\D/g, "") === normalizedPhone);
+  if (!customerAppointments.length) {
+    return res.json({ success: true, appointment: null, appointments: [], customer: null });
+  }
+
+  const mapAppointment = (appointment) => ({
+    id: appointment.id,
+    business: business.name,
+    startAt: appointment.startAt,
+    endAt: appointment.endAt,
+    service: appointment.service.name,
+    employee: appointment.employee.name,
+    customerName: appointment.customerName,
+    customerPhone: appointment.customerPhone,
+    status: appointment.status,
+    paymentMethod: appointment.paymentMethod,
+    paymentStatus: appointment.paymentStatus,
+    paymentAmount: appointment.paymentAmount,
+  });
+
+  res.json({
+    success: true,
+    appointment: mapAppointment(customerAppointments[0]),
+    appointments: customerAppointments.map(mapAppointment),
+    customer: {
+      name: customerAppointments[0].customerName,
+      phone: customerAppointments[0].customerPhone,
+    },
+  });
+});
+
+// DELETE /api/public/:slug/appointments/:id ג€” ״¥„״÷״§״¡ ״­״¬״² ‚״§״¦… …† ״·״± ״§„״²״¨ˆ†
+export const cancelPublicAppointment = asyncHandler(async (req, res) => {
+  const business = await resolveBusinessBySlug(req.params.slug);
+  const id = Number(req.params.id);
+  const phone = String(req.body?.phone || req.query.phone || "").trim();
+  const normalizedPhone = phone.replace(/\D/g, "");
+
+  if (!Number.isInteger(id)) throw ApiError.badRequest("…״¹״± ״§„״­״¬״² ״÷״± ״µ״§„״­");
+  if (normalizedPhone.length < 6) throw ApiError.badRequest("״±‚… ״§„‡״§״× ״÷״± ״µ״§„״­");
+
+  const appointment = await prisma.appointment.findFirst({
+    where: { id, businessId: business.id },
+    include: {
+      service: { select: { name: true } },
+      employee: { select: { name: true } },
+    },
+  });
+  if (!appointment) throw ApiError.notFound("״§„״­״¬״² ״÷״± …ˆ״¬ˆ״¯");
+  if (appointment.customerPhone.replace(/\D/g, "") !== normalizedPhone) {
+    throw ApiError.forbidden("„״§ …ƒ† ״¥„״÷״§״¡ ‡״°״§ ״§„״­״¬״² …† ‡״°״§ ״§„״±‚…");
+  }
+  if (appointment.status === "CANCELLED") {
+    return res.json({ success: true, appointment });
+  }
+  if (["COMPLETED", "NO_SHOW"].includes(appointment.status) || new Date(appointment.endAt) <= new Date()) {
+    throw ApiError.badRequest("„״§ …ƒ† ״¥„״÷״§״¡ ״­״¬״² ״§†״×‡‰ ˆ‚״×‡");
+  }
+  const updated = await prisma.appointment.update({
+    where: { id },
+    data: {
+      status: "CANCELLED",
+      ...(appointment.paymentMethod === "ONLINE" && appointment.paymentStatus === "PAID"
+        ? { paymentStatus: "REFUNDED" }
+        : {}),
+      notes: [appointment.notes, "״£„״÷״§‡ ״§„״²״¨ˆ† …† ״µ״­״© ״§„״­״¬״² ״§„״¹״§…״©"].filter(Boolean).join("\n"),
+    },
+    include: {
+      service: { select: { name: true } },
+      employee: { select: { name: true } },
+    },
+  });
+
+  await Promise.all([
+    logAudit({
+      businessId: business.id,
+      actorName: appointment.customerName,
+      action: AUDIT.BOOKING_CANCELLED,
+      entityType: "Appointment",
+      entityId: appointment.id,
+      meta: { by: "customer", service: appointment.service.name },
+    }),
+    prisma.notification.create({
+      data: {
+        businessId: business.id,
+        type: "CUSTOMER",
+        message: `״×… ״¥„״÷״§״¡ ״­״¬״² ״§„״²״¨ˆ† ${appointment.customerName} …† ״µ״­״© ״§„״­״¬״² ״§„״¹״§…״©`,
+      },
+    }),
+  ]);
+
+  res.json({
+    success: true,
+    appointment: {
+      id: updated.id,
+      business: business.name,
+      startAt: updated.startAt,
+      endAt: updated.endAt,
+      service: updated.service.name,
+      employee: updated.employee.name,
+      customerName: updated.customerName,
+      customerPhone: updated.customerPhone,
+      status: updated.status,
+      paymentMethod: updated.paymentMethod,
+      paymentStatus: updated.paymentStatus,
+      paymentAmount: updated.paymentAmount,
+    },
+  });
+});
+
+// GET /api/public/:slug/print-ticket?phone=
+export const getPrintTicket = asyncHandler(async (req, res) => {
+  const business = await resolveBusinessBySlug(req.params.slug);
+  if (!business.printScreenEnabled) {
+    throw ApiError.forbidden("״´״§״´״© ״§„״·״¨״§״¹״© ״÷״± …״¹„״© „‡״°״§ ״§„…״­„");
+  }
+
+  const phone = String(req.query.phone || "").trim();
+  const normalizedPhone = phone.replace(/\D/g, "");
+  if (normalizedPhone.length < 6) {
+    throw ApiError.badRequest("״±‚… ״§„‡״§״× ״÷״± ״µ״§„״­");
+  }
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      businessId: business.id,
+      status: { in: ["PENDING", "CONFIRMED"] },
+      startAt: { gte: todayStart, lt: tomorrowStart },
+    },
+    include: {
+      service: { select: { name: true } },
+      employee: { select: { name: true } },
+    },
+    orderBy: [{ startAt: "asc" }, { id: "asc" }],
+  });
+
+  const customerAppointments = appointments.filter((item) => item.customerPhone.replace(/\D/g, "") === normalizedPhone);
+  const now = new Date();
+  const appointment =
+    customerAppointments.find((item) => item.endAt >= now) ||
+    customerAppointments[0];
+
+  if (!appointment) {
+    return res.json({
+      success: true,
+      ticket: null,
+      message: "„״§ ˆ״¬״¯ ״¯ˆ״± „‡״°״§ ״§„״±‚… ״§„ˆ…",
+      business: {
+        name: business.name,
+        logoUrl: business.logoUrl,
+        brandColor: business.brandColor,
+      },
+    });
+  }
+
+  if (appointment.status === "PENDING") {
+    return res.json({
+      success: true,
+      ticket: null,
+      message: "״§„״­״¬״² …ˆ״¬ˆ״¯ „ƒ†‡ …״§ ״²״§„ ״¨״§†״×״¸״§״± ״§„״×״£ƒ״¯ …† ״§„…״­„",
+      business: {
+        name: business.name,
+        logoUrl: business.logoUrl,
+        brandColor: business.brandColor,
+      },
+    });
+  }
+
+  const confirmedAppointments = appointments.filter((item) => item.status === "CONFIRMED");
+  const index = confirmedAppointments.findIndex((item) => item.id === appointment.id);
+  if (index === -1) throw ApiError.notFound("„… ״×… ״§„״¹״«ˆ״± ״¹„‰ ״§„״¯ˆ״± ״§„…״₪ƒ״¯ „‡״°״§ ״§„״±‚…");
+  const peopleAhead = Math.max(0, index);
+  const bookingNumber = index + 1;
+
+  res.json({
+    success: true,
+    ticket: {
+      queueNumber: index + 1,
+      peopleAhead,
+      bookingNumber,
+      appointmentId: appointment.id,
+      customerName: appointment.customerName,
+      customerPhone: appointment.customerPhone,
+      service: appointment.service.name,
+      employee: appointment.employee.name,
+      startAt: appointment.startAt,
+      endAt: appointment.endAt,
+      status: appointment.status,
+      queueRule: "״­״³״¨ ˆ‚״× ״§„…ˆ״¹״¯  ״¬״¯ˆ„ ״§„ˆ…",
+    },
+    business: {
+      name: business.name,
+      logoUrl: business.logoUrl,
+      brandColor: business.brandColor,
+    },
   });
 });
 
@@ -228,8 +575,8 @@ export const respondToDelay = asyncHandler(async (req, res) => {
       businessId: appointment.businessId,
       type: "CUSTOMER_RESPONSE",
       message: response === "ACCEPTED"
-        ? `الزبون ${appointment.customerName} وافق على الوقت الجديد`
-        : `الزبون ${appointment.customerName} رفض الوقت الجديد وتم إفراغ الدور`,
+        ? `״§„״²״¨ˆ† ${appointment.customerName} ˆ״§‚ ״¹„‰ ״§„ˆ‚״× ״§„״¬״¯״¯`
+        : `״§„״²״¨ˆ† ${appointment.customerName} ״±״¶ ״§„ˆ‚״× ״§„״¬״¯״¯ ˆ״×… ״¥״±״§״÷ ״§„״¯ˆ״±`,
     },
   });
 
@@ -246,3 +593,74 @@ export const getAppointmentStatus = asyncHandler(async (req, res) => {
   if (!appointment) throw ApiError.notFound("Appointment not found");
   res.json({ success: true, appointment });
 });
+
+// GET /api/public/reviews/:token
+export const getPublicReview = asyncHandler(async (req, res) => {
+  const appointment = await prisma.appointment.findUnique({
+    where: { reviewToken: req.params.token },
+    include: {
+      business: { select: { name: true, logoUrl: true, brandColor: true, reviewsEnabled: true } },
+      service: { select: { name: true } },
+      employee: { select: { name: true, title: true } },
+      review: true,
+    },
+  });
+  if (!appointment) throw ApiError.notFound("״±״§״¨״· ״§„״×‚… ״÷״± ״µ״§„״­");
+  if (!appointment.business.reviewsEnabled) throw ApiError.forbidden("†״¸״§… ״§„״×‚…״§״× ״÷״± …״¹‘„");
+  if (appointment.status !== "COMPLETED") throw ApiError.badRequest("„״§ …ƒ† ״×‚… ״­״¬״² ״÷״± …ƒ״×…„");
+
+  res.json({
+    success: true,
+    alreadyReviewed: Boolean(appointment.review),
+    appointment: {
+      id: appointment.id,
+      customerName: appointment.customerName,
+      startAt: appointment.startAt,
+      service: appointment.service.name,
+      employee: appointment.employee.name,
+      employeeTitle: appointment.employee.title,
+      business: appointment.business,
+    },
+  });
+});
+
+// POST /api/public/reviews/:token
+export const submitPublicReview = asyncHandler(async (req, res) => {
+  const data = validate(reviewSchema, req.body);
+  const appointment = await prisma.appointment.findUnique({
+    where: { reviewToken: req.params.token },
+    include: {
+      business: { select: { reviewsEnabled: true } },
+      review: true,
+    },
+  });
+  if (!appointment) throw ApiError.notFound("״±״§״¨״· ״§„״×‚… ״÷״± ״µ״§„״­");
+  if (!appointment.business.reviewsEnabled) throw ApiError.forbidden("†״¸״§… ״§„״×‚…״§״× ״÷״± …״¹‘„");
+  if (appointment.status !== "COMPLETED") throw ApiError.badRequest("„״§ …ƒ† ״×‚… ״­״¬״² ״÷״± …ƒ״×…„");
+  if (appointment.review) throw ApiError.conflict("״×… ״×‚… ‡״°״§ ״§„״­״¬״² …״³״¨‚‹״§");
+
+  const review = await prisma.review.create({
+    data: {
+      appointmentId: appointment.id,
+      businessId: appointment.businessId,
+      serviceId: appointment.serviceId,
+      employeeId: appointment.employeeId,
+      serviceRating: normalizeRating(data.serviceRating),
+      employeeRating: normalizeRating(data.employeeRating),
+      businessRating: normalizeRating(data.businessRating),
+      comment: data.comment?.trim() || null,
+    },
+  });
+
+  await prisma.notification.create({
+    data: {
+      businessId: appointment.businessId,
+      type: "CUSTOMER",
+      message: `ˆ״µ„ ״×‚… ״¬״¯״¯ …† ״§„״²״¨ˆ† ${appointment.customerName}`,
+    },
+  });
+
+  res.status(201).json({ success: true, review });
+});
+
+

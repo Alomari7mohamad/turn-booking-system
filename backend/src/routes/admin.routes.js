@@ -4,6 +4,7 @@ import { authorize } from "../middleware/authorize.js";
 import { ApiError } from "../utils/ApiError.js";
 import {
   getStats,
+  getAnalytics,
   listBusinesses,
   listManagers,
   createManager,
@@ -20,6 +21,9 @@ import {
   getMyBusiness,
   updateMyBusiness,
   getDashboard,
+  listCustomers,
+  updateCustomerSettings,
+  listCustomerReviews,
   listEmployees,
   createEmployee,
   updateEmployee,
@@ -37,12 +41,18 @@ import {
   deleteBlockedTime,
   listAppointments,
   updateAppointment,
+  createAppointmentReviewLink,
   delayAppointment,
+  getAppointmentRequeueOptions,
+  requeueAppointment,
   cancelAppointment,
   listAuditLogs,
   listNotifications,
   markNotificationsRead,
   deleteNotifications,
+  secretaryToday,
+  secretaryLateTicket,
+  openSecretarySession,
 } from "../controllers/business.controller.js";
 
 const router = Router();
@@ -60,6 +70,7 @@ const resolveManagedBusiness = (req, _res, next) => {
 };
 
 router.get("/stats", getStats);
+router.get("/analytics", getAnalytics);
 router.get("/managers", listManagers);
 router.post("/managers", createManager);
 router.patch("/managers/:id", updateManager);
@@ -76,6 +87,9 @@ router.use("/businesses/:businessId/manage", resolveManagedBusiness);
 router.get("/businesses/:businessId/manage/me", getMyBusiness);
 router.patch("/businesses/:businessId/manage/me", updateMyBusiness);
 router.get("/businesses/:businessId/manage/dashboard", getDashboard);
+router.get("/businesses/:businessId/manage/customers", listCustomers);
+router.patch("/businesses/:businessId/manage/customers/settings", updateCustomerSettings);
+router.get("/businesses/:businessId/manage/customers/:phone/reviews", listCustomerReviews);
 
 router.get("/businesses/:businessId/manage/employees", listEmployees);
 router.post("/businesses/:businessId/manage/employees", createEmployee);
@@ -98,9 +112,16 @@ router.delete("/businesses/:businessId/manage/blocked-times/:id", deleteBlockedT
 
 router.get("/businesses/:businessId/manage/appointments", listAppointments);
 router.patch("/businesses/:businessId/manage/appointments/:id/payment", overrideAppointmentPayment);
+router.post("/businesses/:businessId/manage/appointments/:id/review-link", createAppointmentReviewLink);
 router.patch("/businesses/:businessId/manage/appointments/:id/delay", delayAppointment);
+router.get("/businesses/:businessId/manage/appointments/:id/requeue-options", getAppointmentRequeueOptions);
+router.patch("/businesses/:businessId/manage/appointments/:id/requeue", requeueAppointment);
 router.patch("/businesses/:businessId/manage/appointments/:id", updateAppointment);
 router.delete("/businesses/:businessId/manage/appointments/:id", cancelAppointment);
+
+router.get("/businesses/:businessId/manage/secretary/today", secretaryToday);
+router.post("/businesses/:businessId/manage/secretary/late-ticket", secretaryLateTicket);
+router.post("/businesses/:businessId/manage/secretary/session", openSecretarySession);
 
 router.get("/businesses/:businessId/manage/audit-logs", listAuditLogs);
 router.get("/businesses/:businessId/manage/notifications", listNotifications);

@@ -46,11 +46,14 @@ export default function BusinessSettings() {
         email: r.business.email || "",
         phone: r.business.phone || "",
         address: r.business.address || "",
+        mapUrl: r.business.mapUrl || "",
         logoUrl: r.business.logoUrl || "",
+        bookingHeroImageUrl: r.business.bookingHeroImageUrl || "",
         brandColor: r.business.brandColor || "#064e3b",
         timezone: r.business.timezone || "Asia/Riyadh",
         onlinePaymentEnabled: r.business.onlinePaymentEnabled,
         payAtStoreEnabled: r.business.payAtStoreEnabled,
+        customerHubEnabled: r.business.customerHubEnabled !== false,
       });
       setSlug(r.business.slug);
     });
@@ -79,6 +82,16 @@ export default function BusinessSettings() {
   if (!form) return <Spinner page />;
 
   const noMethod = !form.onlinePaymentEnabled && !form.payAtStoreEnabled;
+  const bookingUrl = `${window.location.origin}/book/${slug}`;
+
+  const copyBookingUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(bookingUrl);
+      toast.success("تم نسخ رابط الحجز");
+    } catch {
+      toast.error("تعذر نسخ الرابط");
+    }
+  };
 
   return (
     <>
@@ -96,17 +109,45 @@ export default function BusinessSettings() {
             <div className="card-pad col" style={{ gap: 16 }}>
               <Field label="اسم المحل"><Input value={form.name} onChange={set("name")} required /></Field>
               <Field label="رابط الحجز" hint="يُدار من قبل الإدارة">
-                <Input value={`/book/${slug}`} disabled />
+                <div className="row" style={{ gap: 10 }}>
+                  <Input value={bookingUrl} readOnly onFocus={(event) => event.target.select()} />
+                  <Button type="button" variant="secondary" onClick={copyBookingUrl}>نسخ</Button>
+                </div>
               </Field>
               <div className="grid grid-2">
                 <Field label="البريد الإلكتروني"><Input type="email" value={form.email} onChange={set("email")} /></Field>
                 <Field label="الهاتف"><Input value={form.phone} onChange={set("phone")} /></Field>
               </div>
               <Field label="العنوان"><Input value={form.address} onChange={set("address")} /></Field>
+              <Field label="رابط الموقع على الخريطة" hint="ضع رابط Google Maps أو Waze أو اكتب العنوان الدقيق ليظهر زر Waze للزبون">
+                <Input value={form.mapUrl} onChange={set("mapUrl")} placeholder="https://waze.com/ul?... أو https://maps.google.com/... أو عنوان المحل" />
+              </Field>
               <div className="grid grid-2">
                 <Field label="شعار المحل">
-                  <LogoPicker value={form.logoUrl} onChange={(logoUrl) => setVal("logoUrl", logoUrl)} onError={toast.error} />
+                  <LogoPicker
+                    value={form.logoUrl}
+                    onChange={(logoUrl) => setVal("logoUrl", logoUrl)}
+                    onError={toast.error}
+                    chooseText="اختار شعار"
+                    changeText="تغيير الشعار"
+                    removeText="إزالة الشعار"
+                    previewAlt="شعار المحل"
+                  />
                 </Field>
+                <Field label="صورة صفحة دخول الزبون">
+                  <LogoPicker
+                    value={form.bookingHeroImageUrl}
+                    onChange={(imageUrl) => setVal("bookingHeroImageUrl", imageUrl)}
+                    onError={toast.error}
+                    chooseText="اختار صورة"
+                    changeText="تغيير الصورة"
+                    removeText="إزالة الصورة"
+                    previewAlt="صورة صفحة دخول الزبون"
+                    imageOptions={{ maxSize: 1400, quality: 0.92 }}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-2">
                 <Field label="لون المحل">
                   <div className="row" style={{ gap: 10 }}>
                     <Input className="color-picker" type="color" value={form.brandColor} onChange={set("brandColor")} />
@@ -137,6 +178,19 @@ export default function BusinessSettings() {
               {noMethod && (
                 <div className="error-text mt-2">⚠ يجب تفعيل طريقة دفع واحدة على الأقل، وإلا لن يتمكّن الزبائن من الحجز.</div>
               )}
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">مجمع الزبائن</h3>
+            </div>
+            <div className="card-pad">
+              <Toggle
+                label="تفعيل مجمع الزبائن"
+                hint="عند التفعيل يتم حفظ بيانات الزبائن وزياراتهم ومدفوعاتهم ونقاطهم. عند الإيقاف لا يتم حفظ زبائن جدد."
+                checked={form.customerHubEnabled}
+                onChange={(v) => setVal("customerHubEnabled", v)}
+              />
             </div>
           </div>
         </div>

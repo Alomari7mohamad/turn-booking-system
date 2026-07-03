@@ -1,5 +1,6 @@
 import { prisma } from "../config/db.js";
 import { ApiError } from "../utils/ApiError.js";
+import { recordCustomerBooking } from "./customer.service.js";
 import {
   hhmmToMinutes,
   minutesToHHMM,
@@ -280,6 +281,8 @@ export async function createAppointmentSafe({
       },
       include: { service: true, employee: true },
     });
+
+    await recordCustomerBooking(tx, appointment);
 
     // إشعار لصاحب المحل
     await tx.notification.create({

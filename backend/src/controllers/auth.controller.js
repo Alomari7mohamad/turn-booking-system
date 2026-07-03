@@ -4,6 +4,19 @@ import { ApiError } from "../utils/ApiError.js";
 import { comparePassword } from "../utils/password.js";
 import { signToken } from "../utils/jwt.js";
 
+const businessSessionSelect = {
+  id: true,
+  name: true,
+  slug: true,
+  logoUrl: true,
+  brandColor: true,
+  isActive: true,
+  printScreenEnabled: true,
+  customerHubEnabled: true,
+  customerPointsPercent: true,
+  reviewsEnabled: true,
+};
+
 // POST /api/auth/login
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -13,7 +26,10 @@ export const login = asyncHandler(async (req, res) => {
 
   const user = await prisma.user.findUnique({
     where: { email: String(email).toLowerCase().trim() },
-    include: { business: { select: { id: true, name: true, slug: true, logoUrl: true, brandColor: true, isActive: true } } },
+    include: {
+      business: { select: businessSessionSelect },
+      employeeProfile: { select: { id: true, role: true, name: true, title: true } },
+    },
   });
 
   if (!user || !(await comparePassword(password, user.passwordHash))) {
@@ -36,6 +52,8 @@ export const login = asyncHandler(async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      staffRole: user.employeeProfile?.role || null,
+      employeeProfile: user.employeeProfile || null,
       businessId: user.businessId,
       business: user.business || null,
     },
@@ -52,8 +70,9 @@ export const me = asyncHandler(async (req, res) => {
       email: true,
       role: true,
       businessId: true,
-      business: { select: { id: true, name: true, slug: true, logoUrl: true, brandColor: true, isActive: true } },
+      employeeProfile: { select: { id: true, role: true, name: true, title: true } },
+      business: { select: businessSessionSelect },
     },
   });
-  res.json({ success: true, user });
+  res.json({ success: true, user: { ...user, staffRole: user.employeeProfile?.role || null } });
 });

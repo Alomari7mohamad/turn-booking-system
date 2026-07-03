@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { adminApi } from "../api/endpoints.js";
 import { useLanguage } from "../context/LanguageContext.jsx";
@@ -39,11 +39,21 @@ function defaultEndDate(plan, startsAt, freeMonths = 0) {
 function createEmptyForm() {
   const startsAt = toDateInput(new Date());
   return {
-    name: "", slug: "", phone: "", address: "",
-    ownerName: "", ownerEmail: "", ownerPassword: "", plan: "MONTHLY",
+    name: "",
+    slug: "",
+    phone: "",
+    address: "",
+    mapUrl: "",
+    ownerName: "",
+    ownerEmail: "",
+    ownerPassword: "",
+    plan: "MONTHLY",
     logoUrl: "",
+    bookingHeroImageUrl: "",
     brandColor: "#064e3b",
     requiresAppointmentApproval: true,
+    printScreenEnabled: false,
+    reviewsEnabled: false,
     startsAt,
     endsAt: defaultEndDate("MONTHLY", startsAt),
     freeMonths: 0,
@@ -53,22 +63,90 @@ function createEmptyForm() {
 const emptyEditForm = {
   id: null,
   name: "",
+  slug: "",
+  email: "",
   ownerName: "",
   ownerEmail: "",
   ownerPassword: "",
   phone: "",
   address: "",
+  mapUrl: "",
+  timezone: "Asia/Riyadh",
   logoUrl: "",
+  bookingHeroImageUrl: "",
   brandColor: "#064e3b",
+  isActive: true,
   requiresAppointmentApproval: true,
+  printScreenEnabled: false,
+  reviewsEnabled: false,
+  onlinePaymentEnabled: false,
+  payAtStoreEnabled: true,
+  subscriptionPlan: "MONTHLY",
+  subscriptionPrice: 0,
+  subscriptionStartsAt: "",
+  subscriptionEndsAt: "",
+  subscriptionFreeMonths: 0,
 };
+
+function ToggleControl({ checked, onChange, title, description, onLabel = "مفعّل", offLabel = "غير مفعّل" }) {
+  return (
+    <button
+      type="button"
+      className={`ios-toggle-card ${checked ? "active" : ""}`}
+      onClick={() => onChange(!checked)}
+      role="switch"
+      aria-checked={checked}
+    >
+      <span className="ios-toggle-copy">
+        <strong>{title}</strong>
+        {description && <small>{description}</small>}
+      </span>
+      <span className="ios-toggle-state">
+        <span className="ios-toggle-label">{checked ? onLabel : offLabel}</span>
+        <span className="ios-toggle-track" aria-hidden="true"><span /></span>
+      </span>
+    </button>
+  );
+}
+
+function PasswordEye({ visible }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false" className="password-eye-icon">
+      {visible ? (
+        <path fill="currentColor" d="M4.3 3 21 19.7 19.7 21l-3-3A10 10 0 0 1 12 19c-5 0-8.5-4.5-9.5-7a13.2 13.2 0 0 1 3.2-4.35L3 4.3 4.3 3Zm3 6.35A9.4 9.4 0 0 0 4.75 12c1 2.15 3.7 5 7.25 5 1.1 0 2.12-.27 3.02-.7l-1.72-1.72a2.8 2.8 0 0 1-3.88-3.88L7.3 9.35ZM12 5c5 0 8.5 4.5 9.5 7a12.6 12.6 0 0 1-2.25 3.35l-1.42-1.42A9.6 9.6 0 0 0 19.25 12c-1-2.15-3.7-5-7.25-5-.77 0-1.5.13-2.18.36L8.25 5.78A9.5 9.5 0 0 1 12 5Z" />
+      ) : (
+        <path fill="currentColor" d="M12 5c5 0 8.5 4.5 9.5 7-1 2.5-4.5 7-9.5 7s-8.5-4.5-9.5-7C3.5 9.5 7 5 12 5Zm0 2c-3.55 0-6.25 2.85-7.25 5 1 2.15 3.7 5 7.25 5s6.25-2.85 7.25-5c-1-2.15-3.7-5-7.25-5Zm0 2.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6Z" />
+      )}
+    </svg>
+  );
+}
+
+function ColorPicker({ value, onChange }) {
+  const color = value || "#064e3b";
+
+  return (
+    <label className="color-picker-control">
+      <span className="color-picker-swatch" style={{ background: color }} aria-hidden="true" />
+      <span className="color-picker-copy">
+        <strong>اختر لون المحل</strong>
+        <small>{color}</small>
+      </span>
+      <input
+        type="color"
+        value={color}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label="اختيار لون المحل"
+      />
+    </label>
+  );
+}
 
 export default function BusinessesManagement() {
   const toast = useToast();
   const { t } = useLanguage();
   const [list, setList] = useState(null);
   const [search, setSearch] = useState("");
-  const [modal, setModal] = useState(null); // 'create' | 'sub'
+  const [modal, setModal] = useState(null);
   const [form, setForm] = useState(createEmptyForm);
   const [editForm, setEditForm] = useState(emptyEditForm);
   const [subForm, setSubForm] = useState({
@@ -87,16 +165,27 @@ export default function BusinessesManagement() {
   const load = () => adminApi.listBusinesses(search).then((r) => setList(r.businesses));
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
   const setCreateSubscription = (patch) =>
-    setForm((f) => {
-      const next = { ...f, ...patch };
+    setForm((current) => {
+      const next = { ...current, ...patch };
       return { ...next, endsAt: defaultEndDate(next.plan, next.startsAt, next.freeMonths) };
     });
   const setRenewSubscription = (patch) =>
-    setSubForm((f) => {
-      const next = { ...f, ...patch };
+    setSubForm((current) => {
+      const next = { ...current, ...patch };
       return { ...next, endsAt: defaultEndDate(next.plan, next.startsAt, next.freeMonths) };
+    });
+  const setEditSubscription = (patch) =>
+    setEditForm((current) => {
+      const next = { ...current, ...patch };
+      if ("subscriptionPlan" in patch || "subscriptionStartsAt" in patch || "subscriptionFreeMonths" in patch) {
+        return {
+          ...next,
+          subscriptionEndsAt: defaultEndDate(next.subscriptionPlan, next.subscriptionStartsAt, next.subscriptionFreeMonths),
+        };
+      }
+      return next;
     });
 
   const openCreateModal = () => {
@@ -123,20 +212,35 @@ export default function BusinessesManagement() {
     setEditForm({
       id: business.id,
       name: business.name || "",
+      slug: business.slug || "",
+      email: business.email || "",
       ownerName: business.owner?.name || "",
       ownerEmail: business.owner?.email || "",
       ownerPassword: business.owner?.loginPassword || "",
       phone: business.phone || "",
       address: business.address || "",
+      mapUrl: business.mapUrl || "",
+      timezone: business.timezone || "Asia/Riyadh",
       logoUrl: business.logoUrl || "",
+      bookingHeroImageUrl: business.bookingHeroImageUrl || "",
       brandColor: business.brandColor || "#064e3b",
+      isActive: business.isActive !== false,
       requiresAppointmentApproval: business.requiresAppointmentApproval !== false,
+      printScreenEnabled: business.printScreenEnabled === true,
+      reviewsEnabled: business.reviewsEnabled === true,
+      onlinePaymentEnabled: business.onlinePaymentEnabled === true,
+      payAtStoreEnabled: business.payAtStoreEnabled !== false,
+      subscriptionPlan: business.subscription?.plan || "MONTHLY",
+      subscriptionPrice: business.subscription?.price || 0,
+      subscriptionStartsAt: toDateInput(business.subscription?.startsAt) || toDateInput(new Date()),
+      subscriptionEndsAt: toDateInput(business.subscription?.endsAt) || defaultEndDate(business.subscription?.plan || "MONTHLY", toDateInput(new Date())),
+      subscriptionFreeMonths: 0,
     });
     setModal("edit");
   };
 
-  const createBusiness = async (e) => {
-    e.preventDefault();
+  const createBusiness = async (event) => {
+    event.preventDefault();
     setSaving(true);
     try {
       await adminApi.createBusiness(form);
@@ -151,20 +255,35 @@ export default function BusinessesManagement() {
     }
   };
 
-  const saveEdit = async (e) => {
-    e.preventDefault();
+  const saveEdit = async (event) => {
+    event.preventDefault();
     setSaving(true);
     try {
       await adminApi.updateBusiness(editForm.id, {
         name: editForm.name,
+        slug: editForm.slug,
+        email: editForm.email,
         ownerName: editForm.ownerName,
         ownerEmail: editForm.ownerEmail,
         ownerPassword: editForm.ownerPassword,
         phone: editForm.phone,
         address: editForm.address,
+        mapUrl: editForm.mapUrl,
+        timezone: editForm.timezone,
         logoUrl: editForm.logoUrl,
+        bookingHeroImageUrl: editForm.bookingHeroImageUrl,
         brandColor: editForm.brandColor,
+        isActive: editForm.isActive,
         requiresAppointmentApproval: editForm.requiresAppointmentApproval,
+        printScreenEnabled: editForm.printScreenEnabled,
+        reviewsEnabled: editForm.reviewsEnabled,
+        onlinePaymentEnabled: editForm.onlinePaymentEnabled,
+        payAtStoreEnabled: editForm.payAtStoreEnabled,
+        subscriptionPlan: editForm.subscriptionPlan,
+        subscriptionPrice: Number(editForm.subscriptionPrice || 0),
+        subscriptionStartsAt: editForm.subscriptionStartsAt,
+        subscriptionEndsAt: editForm.subscriptionEndsAt,
+        subscriptionFreeMonths: Number(editForm.subscriptionFreeMonths || 0),
       });
       toast.success("تم تحديث بيانات المحل");
       setModal(null);
@@ -178,19 +297,19 @@ export default function BusinessesManagement() {
   };
 
   const doToggle = async () => {
-    const b = confirmToggle;
+    const business = confirmToggle;
     setConfirmToggle(null);
     try {
-      await adminApi.toggleStatus(b.id, !b.isActive);
-      toast.success(b.isActive ? "تم إيقاف المحل" : "تم تفعيل المحل");
+      await adminApi.toggleStatus(business.id, !business.isActive);
+      toast.success(business.isActive ? "تم إيقاف المحل" : "تم تفعيل المحل");
       load();
     } catch (err) {
       toast.error(err.message);
     }
   };
 
-  const saveSub = async (e) => {
-    e.preventDefault();
+  const saveSub = async (event) => {
+    event.preventDefault();
     setSaving(true);
     try {
       await adminApi.updateSubscription(subForm.id, {
@@ -268,11 +387,8 @@ export default function BusinessesManagement() {
       </div>
 
       <div className="card card-pad mt-2" style={{ marginBottom: 18 }}>
-        <form
-          className="row"
-          onSubmit={(e) => { e.preventDefault(); load(); }}
-        >
-          <Input placeholder={t("searchBusinessPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
+        <form className="row" onSubmit={(event) => { event.preventDefault(); load(); }}>
+          <Input placeholder={t("searchBusinessPlaceholder")} value={search} onChange={(event) => setSearch(event.target.value)} />
           <Button variant="ghost" type="submit">{t("search")}</Button>
         </form>
       </div>
@@ -294,55 +410,54 @@ export default function BusinessesManagement() {
                 </tr>
               </thead>
               <tbody>
-                {list.map((b) => (
-                  <tr key={b.id} className={isExpiringSoon(b) ? "subscription-expiring-row" : ""}>
+                {list.map((business) => (
+                  <tr key={business.id} className={isExpiringSoon(business) ? "subscription-expiring-row" : ""}>
                     <td>
                       <div className="business-cell">
-                        {b.logoUrl ? <img src={b.logoUrl} alt={b.name} /> : <span className="business-cell-placeholder">🏪</span>}
+                        <img src={business.logoUrl || "/oh-tech-logo.jpg"} alt={business.name} />
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 700 }}>{b.name}</div>
-                          <div className="soft" style={{ fontSize: 12.5 }}>/book/{b.slug}</div>
+                          <div style={{ fontWeight: 700 }}>{business.name}</div>
+                          <div className="soft" style={{ fontSize: 12.5 }}>/book/{business.slug}</div>
+                          {business.printScreenEnabled && (
+                            <a className="soft" style={{ fontSize: 12.5, color: "var(--primary)", fontWeight: 800 }} href={`/print/${business.slug}`} target="_blank" rel="noreferrer">
+                              /print/{business.slug}
+                            </a>
+                          )}
                         </div>
                       </div>
                     </td>
                     <td>
-                      {b.owner ? (
+                      {business.owner ? (
                         <>
-                          <div>{b.owner.name}</div>
-                          <div className="soft" style={{ fontSize: 12.5 }}>{b.owner.email}</div>
+                          <div>{business.owner.name}</div>
+                          <div className="soft" style={{ fontSize: 12.5 }}>{business.owner.email}</div>
                         </>
-                      ) : <span className="soft">—</span>}
+                      ) : <span className="soft">-</span>}
                     </td>
                     <td className="hide-mobile muted" style={{ fontSize: 13 }}>
-                      {fmtNumber(b.counts.appointments)} {t("appointmentsShort")} · {fmtNumber(b.counts.employees)} {t("employeesShort")} · {fmtNumber(b.counts.services)} {t("servicesShort")}
+                      {fmtNumber(business.counts.appointments)} {t("appointmentsShort")} - {fmtNumber(business.counts.employees)} {t("employeesShort")} - {fmtNumber(business.counts.services)} {t("servicesShort")}
                     </td>
                     <td>
-                      {b.subscription ? (
-                        <Badge tone={b.subscription.plan === "YEARLY" ? "primary" : "info"}>
-                          {planLabel(b.subscription.plan, t)}
+                      {business.subscription ? (
+                        <Badge tone={business.subscription.plan === "YEARLY" ? "primary" : "info"}>
+                          {planLabel(business.subscription.plan, t)}
                         </Badge>
-                      ) : <span className="soft">—</span>}
+                      ) : <span className="soft">-</span>}
                     </td>
-                    <td>{fmtDate(b.subscription?.startsAt)}</td>
-                    <td>{fmtDate(b.subscription?.endsAt)}</td>
+                    <td>{fmtDate(business.subscription?.startsAt)}</td>
+                    <td>{fmtDate(business.subscription?.endsAt)}</td>
                     <td>
-                      <Badge tone={b.isActive ? "success" : "danger"}>
-                        {b.isActive ? t("active") : t("inactive")}
+                      <Badge tone={business.isActive ? "success" : "danger"}>
+                        {business.isActive ? t("active") : t("inactive")}
                       </Badge>
                     </td>
                     <td>
                       <div className="row" style={{ gap: 6 }}>
-                        <Link to={`/admin/businesses/${b.id}/control`} className="btn btn-sm btn-primary">
-                          {t("control")}
-                        </Link>
-                        <Button size="sm" variant="ghost" onClick={() => openEditModal(b)}>
-                          {t("edit")}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => openRenewModal(b)}>
-                          {t("renewSubscription")}
-                        </Button>
-                        <Button size="sm" variant={b.isActive ? "danger" : "primary"} onClick={() => setConfirmToggle(b)}>
-                          {b.isActive ? "إيقاف" : "تفعيل"}
+                        <Link to={`/admin/businesses/${business.id}/control`} className="btn btn-sm btn-primary">{t("control")}</Link>
+                        <Button size="sm" variant="ghost" onClick={() => openEditModal(business)}>{t("edit")}</Button>
+                        <Button size="sm" variant="ghost" onClick={() => openRenewModal(business)}>{t("renewSubscription")}</Button>
+                        <Button size="sm" variant={business.isActive ? "danger" : "primary"} onClick={() => setConfirmToggle(business)}>
+                          {business.isActive ? "إيقاف" : "تفعيل"}
                         </Button>
                       </div>
                     </td>
@@ -352,138 +467,37 @@ export default function BusinessesManagement() {
             </table>
           </div>
         ) : (
-          <EmptyState icon="🏢" title={t("noBusinesses")} hint={t("addFirstBusinessForStart")} action={<Button onClick={openCreateModal}>{t("newBusiness")}</Button>} />
+          <EmptyState title={t("noBusinesses")} hint={t("addFirstBusinessForStart")} action={<Button onClick={openCreateModal}>{t("newBusiness")}</Button>} />
         )}
       </div>
 
-      {/* إنشاء محل */}
-      <Modal
+      <BusinessFormModal
+        mode="create"
         open={modal === "create"}
+        saving={saving}
+        form={form}
+        setForm={setForm}
+        showOwnerPassword={showOwnerPassword}
+        setShowOwnerPassword={setShowOwnerPassword}
         onClose={() => setModal(null)}
-        title="إضافة محل جديد"
-        large
-        closeOnOverlay={false}
-        footer={
-          <>
-            <Button form="create-biz" type="submit" loading={saving}>إنشاء المحل</Button>
-            <Button variant="ghost" onClick={() => setModal(null)}>إلغاء</Button>
-          </>
-        }
-      >
-        <form id="create-biz" onSubmit={createBusiness} className="col" style={{ gap: 16 }}>
-          <div style={{ fontWeight: 700 }}>بيانات المحل</div>
-          <div className="grid grid-2">
-            <Field label="اسم المحل"><Input value={form.name} onChange={set("name")} required /></Field>
-            <Field label="الرابط (slug)" hint="يُترك فارغًا للتوليد التلقائي"><Input value={form.slug} onChange={set("slug")} placeholder="my-salon" /></Field>
-            <Field label="الهاتف"><Input value={form.phone} onChange={set("phone")} /></Field>
-            <Field label="العنوان"><Input value={form.address} onChange={set("address")} /></Field>
-            <Field label="شعار المحل">
-              <LogoPicker value={form.logoUrl} onChange={(logoUrl) => setForm((f) => ({ ...f, logoUrl }))} onError={toast.error} />
-            </Field>
-            <Field label="لون المحل">
-              <div className="row" style={{ gap: 10 }}>
-                <Input className="color-picker" type="color" value={form.brandColor} onChange={set("brandColor")} />
-                <span className="soft">{form.brandColor}</span>
-              </div>
-            </Field>
-            <Field label="سياسة تأكيد الحجوزات" hint="للعيادات يمكن تأكيد كل الأدوار تلقائيًا، وللصالونات يمكن مراجعة الدور وقبوله أو رفضه.">
-              <Select
-                value={form.requiresAppointmentApproval ? "REVIEW" : "AUTO"}
-                onChange={(e) => setForm((f) => ({ ...f, requiresAppointmentApproval: e.target.value === "REVIEW" }))}
-              >
-                <option value="REVIEW">مراجعة الحجوزات قبل التأكيد</option>
-                <option value="AUTO">تأكيد كل الحجوزات تلقائيًا</option>
-              </Select>
-            </Field>
-          </div>
+        onSubmit={createBusiness}
+        setValue={set}
+        setSubscription={setCreateSubscription}
+      />
 
-          <div style={{ fontWeight: 700, marginTop: 6 }}>حساب صاحب المحل</div>
-          <div className="grid grid-2">
-            <Field label="الاسم"><Input value={form.ownerName} onChange={set("ownerName")} required /></Field>
-            <Field label="البريد الإلكتروني"><Input type="email" value={form.ownerEmail} onChange={set("ownerEmail")} required /></Field>
-            <Field label="كلمة المرور"><Input type="text" value={form.ownerPassword} onChange={set("ownerPassword")} required /></Field>
-            <Field label="نوع الاشتراك">
-              <Select value={form.plan} onChange={(e) => setCreateSubscription({ plan: e.target.value })}>
-                <option value="MONTHLY">شهري</option>
-                <option value="YEARLY">سنوي</option>
-              </Select>
-            </Field>
-            <Field label="تاريخ بداية الاشتراك">
-              <Input type="date" value={form.startsAt} onChange={(e) => setCreateSubscription({ startsAt: e.target.value })} required />
-            </Field>
-            <Field label="تاريخ نهاية الاشتراك">
-              <Input type="date" value={form.endsAt} onChange={set("endsAt")} required />
-            </Field>
-            <Field label="مدة الفترة المجانية بالأشهر">
-              <Input type="number" min="0" value={form.freeMonths} onChange={(e) => setCreateSubscription({ freeMonths: e.target.value })} />
-            </Field>
-          </div>
-        </form>
-      </Modal>
-
-      {/* تعديل محل */}
-      <Modal
+      <BusinessFormModal
+        mode="edit"
         open={modal === "edit"}
+        saving={saving}
+        form={editForm}
+        setForm={setEditForm}
+        showOwnerPassword={showOwnerPassword}
+        setShowOwnerPassword={setShowOwnerPassword}
         onClose={() => setModal(null)}
-        title="تعديل بيانات المحل"
-        large
-        footer={
-          <>
-            <Button form="edit-biz" type="submit" loading={saving}>حفظ التغييرات</Button>
-            <Button variant="ghost" onClick={() => setModal(null)}>إلغاء</Button>
-          </>
-        }
-      >
-        <form id="edit-biz" onSubmit={saveEdit} className="col" style={{ gap: 16 }}>
-          <div className="grid grid-2">
-            <Field label="اسم المحل"><Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required /></Field>
-            <Field label="اسم صاحب المحل"><Input value={editForm.ownerName} onChange={(e) => setEditForm({ ...editForm, ownerName: e.target.value })} required /></Field>
-            <Field label="رقم الهاتف"><Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></Field>
-            <Field label="العنوان"><Input value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} /></Field>
-            <Field label="البريد الإلكتروني"><Input type="email" value={editForm.ownerEmail} onChange={(e) => setEditForm({ ...editForm, ownerEmail: e.target.value })} required /></Field>
-            <Field label="كلمة السر">
-              <div className="password-input">
-                <Input
-                  type={showOwnerPassword ? "text" : "password"}
-                  value={editForm.ownerPassword}
-                  onChange={(e) => setEditForm({ ...editForm, ownerPassword: e.target.value })}
-                  placeholder={editForm.ownerPassword ? "" : "غير محفوظة سابقًا"}
-                />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowOwnerPassword((value) => !value)}
-                  aria-label={showOwnerPassword ? "إخفاء كلمة السر" : "إظهار كلمة السر"}
-                  title={showOwnerPassword ? "إخفاء كلمة السر" : "إظهار كلمة السر"}
-                >
-                  {showOwnerPassword ? "🙈" : "👁"}
-                </button>
-              </div>
-            </Field>
-            <Field label="شعار المحل">
-              <LogoPicker value={editForm.logoUrl} onChange={(logoUrl) => setEditForm((f) => ({ ...f, logoUrl }))} onError={toast.error} />
-            </Field>
-            <Field label="لون المحل">
-              <div className="row" style={{ gap: 10 }}>
-                <Input className="color-picker" type="color" value={editForm.brandColor} onChange={(e) => setEditForm({ ...editForm, brandColor: e.target.value })} />
-                <span className="soft">{editForm.brandColor}</span>
-              </div>
-            </Field>
-            <Field label="سياسة تأكيد الحجوزات" hint="اختر هل يحتاج الحجز قبولًا من صاحب المحل أو يتم تأكيده تلقائيًا.">
-              <Select
-                value={editForm.requiresAppointmentApproval ? "REVIEW" : "AUTO"}
-                onChange={(e) => setEditForm((f) => ({ ...f, requiresAppointmentApproval: e.target.value === "REVIEW" }))}
-              >
-                <option value="REVIEW">مراجعة الحجوزات قبل التأكيد</option>
-                <option value="AUTO">تأكيد كل الحجوزات تلقائيًا</option>
-              </Select>
-            </Field>
-          </div>
-          <p className="help-text">لا يمكن تغيير الرابط أو الاشتراك من هذه النافذة.</p>
-        </form>
-      </Modal>
+        onSubmit={saveEdit}
+        setSubscription={setEditSubscription}
+      />
 
-      {/* تعديل الاشتراك */}
       <Modal
         open={modal === "sub"}
         onClose={() => setModal(null)}
@@ -497,24 +511,24 @@ export default function BusinessesManagement() {
       >
         <form id="sub-form" onSubmit={saveSub} className="col" style={{ gap: 16 }}>
           <Field label="نوع الاشتراك">
-            <Select value={subForm.plan} onChange={(e) => setRenewSubscription({ plan: e.target.value })}>
+            <Select value={subForm.plan} onChange={(event) => setRenewSubscription({ plan: event.target.value })}>
               <option value="MONTHLY">شهري (30 يومًا)</option>
               <option value="YEARLY">سنوي (365 يومًا)</option>
             </Select>
           </Field>
           <Field label="القيمة (₪)">
-            <Input type="number" min="0" value={subForm.price} onChange={(e) => setSubForm({ ...subForm, price: e.target.value })} />
+            <Input type="number" min="0" value={subForm.price} onChange={(event) => setSubForm({ ...subForm, price: event.target.value })} />
           </Field>
           <div className="grid grid-2">
             <Field label="تاريخ البداية">
-              <Input type="date" value={subForm.startsAt} onChange={(e) => setRenewSubscription({ startsAt: e.target.value })} required />
+              <Input type="date" value={subForm.startsAt} onChange={(event) => setRenewSubscription({ startsAt: event.target.value })} required />
             </Field>
             <Field label="تاريخ النهاية">
-              <Input type="date" value={subForm.endsAt} onChange={(e) => setSubForm({ ...subForm, endsAt: e.target.value })} required />
+              <Input type="date" value={subForm.endsAt} onChange={(event) => setSubForm({ ...subForm, endsAt: event.target.value })} required />
             </Field>
           </div>
-          <Field label="المدة المجانية بالأشهر">
-            <Input type="number" min="0" value={subForm.freeMonths} onChange={(e) => setRenewSubscription({ freeMonths: e.target.value })} />
+          <Field label="مدة الفترة المجانية بالأشهر">
+            <Input type="number" min="0" value={subForm.freeMonths} onChange={(event) => setRenewSubscription({ freeMonths: event.target.value })} />
           </Field>
           <p className="help-text">سيتم إنشاء اشتراك فعّال جديد بهذه القيم.</p>
         </form>
@@ -523,9 +537,7 @@ export default function BusinessesManagement() {
       <ConfirmDialog
         open={!!confirmToggle}
         title={confirmToggle?.isActive ? "إيقاف المحل" : "تفعيل المحل"}
-        message={confirmToggle?.isActive
-          ? `سيتم إيقاف "${confirmToggle?.name}" ولن يتمكن صاحبه أو زبائنه من استخدامه.`
-          : `سيتم تفعيل "${confirmToggle?.name}".`}
+        message={confirmToggle?.isActive ? `سيتم إيقاف "${confirmToggle?.name}" ولن يتمكن صاحبه أو زبائنه من استخدامه.` : `سيتم تفعيل "${confirmToggle?.name}".`}
         confirmText={confirmToggle?.isActive ? "إيقاف" : "تفعيل"}
         danger={confirmToggle?.isActive}
         onConfirm={doToggle}
@@ -534,3 +546,186 @@ export default function BusinessesManagement() {
     </>
   );
 }
+
+function BusinessFormModal({
+  mode,
+  open,
+  saving,
+  form,
+  setForm,
+  showOwnerPassword,
+  setShowOwnerPassword,
+  onClose,
+  onSubmit,
+  setSubscription,
+}) {
+  const isEdit = mode === "edit";
+  const formId = isEdit ? "edit-biz" : "create-biz";
+  const title = isEdit ? "تعديل بيانات المحل" : "إضافة محل جديد";
+
+  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const inputValue = (key) => form[key] ?? "";
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={title}
+      large
+      closeOnOverlay={!isEdit ? false : undefined}
+      footer={
+        <>
+          <Button form={formId} type="submit" loading={saving}>{isEdit ? "حفظ التغييرات" : "إنشاء المحل"}</Button>
+          <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={onSubmit} className="col" style={{ gap: 16 }}>
+        <div style={{ fontWeight: 800 }}>بيانات المحل</div>
+        <div className="grid grid-2">
+          <Field label="اسم المحل"><Input value={inputValue("name")} onChange={(event) => update("name", event.target.value)} required /></Field>
+          <Field label="الرابط (slug)" hint="يُترك فارغًا للتوليد التلقائي">
+            <Input value={inputValue("slug")} onChange={(event) => update("slug", event.target.value)} placeholder="my-salon" />
+          </Field>
+          <Field label="الهاتف"><Input value={inputValue("phone")} onChange={(event) => update("phone", event.target.value)} /></Field>
+          <Field label="البريد الإلكتروني للمحل"><Input type="email" value={inputValue("email")} onChange={(event) => update("email", event.target.value)} /></Field>
+          <Field label="العنوان"><Input value={inputValue("address")} onChange={(event) => update("address", event.target.value)} /></Field>
+          <Field label="رابط الموقع على الخريطة أو Waze"><Input value={inputValue("mapUrl")} onChange={(event) => update("mapUrl", event.target.value)} placeholder="https://waze.com/ul/..." /></Field>
+          <Field label="شعار المحل">
+            <LogoPicker
+              value={form.logoUrl}
+              onChange={(logoUrl) => update("logoUrl", logoUrl)}
+              chooseText="اختار شعار"
+              changeText="تغيير الشعار"
+              removeText="إزالة الشعار"
+              previewAlt="شعار المحل"
+            />
+          </Field>
+          <Field label="صورة صفحة دخول الزبون">
+            <LogoPicker
+              value={form.bookingHeroImageUrl}
+              onChange={(bookingHeroImageUrl) => update("bookingHeroImageUrl", bookingHeroImageUrl)}
+              chooseText="اختار صورة"
+              changeText="تغيير الصورة"
+              removeText="إزالة الصورة"
+              previewAlt="صورة صفحة دخول الزبون"
+              imageOptions={{ maxSize: 1400, quality: 0.92 }}
+            />
+          </Field>
+          <Field label="لون المحل"><ColorPicker value={form.brandColor} onChange={(brandColor) => update("brandColor", brandColor)} /></Field>
+        </div>
+
+        <div style={{ fontWeight: 800, marginTop: 8 }}>حساب صاحب المحل</div>
+        <div className="grid grid-2">
+          <Field label="اسم صاحب المحل"><Input value={inputValue("ownerName")} onChange={(event) => update("ownerName", event.target.value)} required /></Field>
+          <Field label="البريد الإلكتروني"><Input type="email" value={inputValue("ownerEmail")} onChange={(event) => update("ownerEmail", event.target.value)} required /></Field>
+          <Field label="كلمة السر">
+            <div className="password-field">
+              <Input
+                type={showOwnerPassword ? "text" : "password"}
+                value={inputValue("ownerPassword")}
+                onChange={(event) => update("ownerPassword", event.target.value)}
+                placeholder={isEdit ? "اتركها فارغة إذا لا تريد تغييرها" : ""}
+                required={!isEdit}
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowOwnerPassword((value) => !value)}
+                aria-label={showOwnerPassword ? "إخفاء كلمة السر" : "إظهار كلمة السر"}
+                title={showOwnerPassword ? "إخفاء كلمة السر" : "إظهار كلمة السر"}
+              >
+                <PasswordEye visible={showOwnerPassword} />
+              </button>
+            </div>
+          </Field>
+        </div>
+
+        <div style={{ fontWeight: 800, marginTop: 8 }}>إعدادات الحجز والتشغيل</div>
+        <div className="grid grid-2">
+          <Field label="سياسة تأكيد الحجوزات" hint="اختر هل يحتاج الحجز قبولًا من صاحب المحل أو يتم تأكيده تلقائيًا.">
+            <ToggleControl
+              checked={form.requiresAppointmentApproval}
+              onChange={(value) => update("requiresAppointmentApproval", value)}
+              title="مراجعة الحجوزات"
+              description={form.requiresAppointmentApproval ? "الحجز يحتاج قبولًا أو رفضًا قبل تثبيته." : "كل الحجوزات تتأكد تلقائيًا."}
+              onLabel="مراجعة"
+              offLabel="تلقائي"
+            />
+          </Field>
+          <Field label="شاشة طباعة الدور في المحل" hint="فعّلها إذا كان لدى المحل شاشة أو جهاز طباعة لاستخراج رقم الدور.">
+            <ToggleControl
+              checked={form.printScreenEnabled}
+              onChange={(value) => update("printScreenEnabled", value)}
+              title="تفعيل شاشة الطباعة"
+              description="يظهر رابط شاشة الطباعة داخل المحل."
+            />
+          </Field>
+          <Field label="نظام التقييمات" hint="فعّله إذا كان المحل يريد إرسال رابط تقييم بعد اكتمال الحجز.">
+            <ToggleControl
+              checked={form.reviewsEnabled}
+              onChange={(value) => update("reviewsEnabled", value)}
+              title="تفعيل تقييمات الزبائن"
+              description="يستطيع الزبون تقييم الخدمة والعامل والمحل من 5 نجوم."
+            />
+          </Field>
+          {isEdit && (
+            <>
+              <Field label="تفعيل المحل"><ToggleControl checked={form.isActive} onChange={(value) => update("isActive", value)} title="تفعيل المحل" description="المحل يعمل ويمكن استخدام صفحاته." /></Field>
+              <Field label="الدفع الإلكتروني"><ToggleControl checked={form.onlinePaymentEnabled} onChange={(value) => update("onlinePaymentEnabled", value)} title="تفعيل الدفع الإلكتروني" description="يسمح للزبائن بالدفع إلكترونيًا عند الحجز." /></Field>
+              <Field label="الدفع في المحل"><ToggleControl checked={form.payAtStoreEnabled} onChange={(value) => update("payAtStoreEnabled", value)} title="تفعيل الدفع في المحل" description="يسمح للزبائن بالدفع عند الوصول للمحل." /></Field>
+            </>
+          )}
+        </div>
+
+        <div style={{ fontWeight: 800, marginTop: 8 }}>الاشتراك</div>
+        <div className="grid grid-2">
+          <Field label="نوع الاشتراك">
+            <Select
+              value={isEdit ? form.subscriptionPlan : form.plan}
+              onChange={(event) => isEdit ? setSubscription({ subscriptionPlan: event.target.value }) : setSubscription({ plan: event.target.value })}
+            >
+              <option value="MONTHLY">شهري</option>
+              <option value="YEARLY">سنوي</option>
+            </Select>
+          </Field>
+          <Field label="القيمة (₪)">
+            <Input
+              type="number"
+              min="0"
+              value={isEdit ? form.subscriptionPrice : (form.price || 0)}
+              onChange={(event) => isEdit ? update("subscriptionPrice", event.target.value) : update("price", event.target.value)}
+            />
+          </Field>
+          <Field label="تاريخ بداية الاشتراك">
+            <Input
+              type="date"
+              value={isEdit ? form.subscriptionStartsAt : form.startsAt}
+              onChange={(event) => isEdit ? setSubscription({ subscriptionStartsAt: event.target.value }) : setSubscription({ startsAt: event.target.value })}
+              required
+            />
+          </Field>
+          <Field label="تاريخ نهاية الاشتراك">
+            <Input
+              type="date"
+              value={isEdit ? form.subscriptionEndsAt : form.endsAt}
+              onChange={(event) => isEdit ? update("subscriptionEndsAt", event.target.value) : update("endsAt", event.target.value)}
+              required
+            />
+          </Field>
+          <Field label="مدة الفترة المجانية بالأشهر">
+            <Input
+              type="number"
+              min="0"
+              value={isEdit ? form.subscriptionFreeMonths : form.freeMonths}
+              onChange={(event) => isEdit ? setSubscription({ subscriptionFreeMonths: event.target.value }) : setSubscription({ freeMonths: event.target.value })}
+            />
+          </Field>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+
+

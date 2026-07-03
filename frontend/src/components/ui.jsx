@@ -1,4 +1,4 @@
-export function Spinner({ page }) {
+﻿export function Spinner({ page }) {
   if (page) {
     return (
       <div className="spinner-page">
@@ -91,7 +91,7 @@ export const fmtPrice = (n) => `${fmtNumber(n)} ₪`;
 
 export const fmtDate = (d) => {
   const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "-";
   return [
     String(date.getDate()).padStart(2, "0"),
     String(date.getMonth() + 1).padStart(2, "0"),
@@ -106,7 +106,7 @@ export const STATUS_META = {
   PENDING: { label: "بانتظار التأكيد", tone: "warning" },
   CONFIRMED: { label: "مؤكد", tone: "info" },
   COMPLETED: { label: "مكتمل", tone: "success" },
-  CANCELLED: { label: "ملغي", tone: "danger" },
+  CANCELLED: { label: "مرفوض", tone: "danger" },
   NO_SHOW: { label: "لم يحضر", tone: "muted" },
 };
 
@@ -121,3 +121,4 @@ export const PAYMENT_METHOD_META = {
   ONLINE: { label: "دفع إلكتروني", icon: "" },
   PAY_AT_STORE: { label: "دفع في المحل", icon: "" },
 };
+

@@ -3,9 +3,9 @@ import { useBusinessManage } from "../context/BusinessManageContext.jsx";
 import { useToast } from "../components/Toast.jsx";
 import { Modal } from "../components/Modal.jsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
-import { Button, Field, Input, Badge, Spinner, EmptyState } from "../components/ui.jsx";
+import { Button, Field, Input, Select, Badge, Spinner, EmptyState } from "../components/ui.jsx";
 
-const empty = { name: "", phone: "", title: "", serviceIds: [], loginEmail: "", loginPassword: "" };
+const empty = { name: "", phone: "", title: "", role: "PROVIDER", serviceIds: [], loginEmail: "", loginPassword: "" };
 const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
 function buildEmployeeWeek(saved = [], businessHours = []) {
@@ -58,7 +58,7 @@ export default function EmployeesManagement() {
   const openEdit = (e) => {
     setEditing(e.id);
     setShowPassword(false);
-    setForm({ name: e.name, phone: e.phone || "", title: e.title || "", serviceIds: e.serviceIds || [], loginEmail: e.user?.email || "", loginPassword: e.loginPassword || "" });
+    setForm({ name: e.name, phone: e.phone || "", title: e.title || "", role: e.role || "PROVIDER", serviceIds: e.serviceIds || [], loginEmail: e.user?.email || "", loginPassword: e.loginPassword || "" });
     setModal(true);
   };
   const set = (k) => (ev) => setForm((f) => ({ ...f, [k]: ev.target.value }));
@@ -105,7 +105,7 @@ export default function EmployeesManagement() {
     setSaving(true);
     try {
       if (editing) {
-        await api.updateEmployee(editing, { name: form.name, phone: form.phone, title: form.title, serviceIds: form.serviceIds, loginEmail: form.loginEmail, loginPassword: form.loginPassword });
+        await api.updateEmployee(editing, { name: form.name, phone: form.phone, title: form.title, role: form.role, serviceIds: form.serviceIds, loginEmail: form.loginEmail, loginPassword: form.loginPassword });
       } else {
         await api.createEmployee(form);
       }
@@ -152,9 +152,10 @@ export default function EmployeesManagement() {
               <div className="row">
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700 }}>{e.name}</div>
-                  <div className="soft" style={{ fontSize: 13 }}>{e.title || "موظف"}</div>
+                  <div className="soft" style={{ fontSize: 13 }}>{e.title || (e.role === "SECRETARY" ? "قسم سكرتارية" : "مقدم خدمة")}</div>
                 </div>
               </div>
+              {e.role === "SECRETARY" && <div style={{ marginTop: 8 }}><Badge tone="success">قسم سكرتارية</Badge></div>}
               {e.phone && <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>📞 {e.phone}</div>}
               {e.user && <div style={{ marginTop: 8 }}><Badge tone="primary">🔑 لديه حساب دخول</Badge></div>}
               <div className="row wrap" style={{ gap: 6, marginTop: 12 }}>
@@ -190,6 +191,12 @@ export default function EmployeesManagement() {
           <div className="grid grid-2">
             <Field label="الاسم"><Input value={form.name} onChange={set("name")} required /></Field>
             <Field label="المسمى الوظيفي"><Input value={form.title} onChange={set("title")} placeholder="مثال: مصفف شعر" /></Field>
+            <Field label="دور الموظف">
+              <Select value={form.role} onChange={set("role")}>
+                <option value="PROVIDER">مقدم خدمة</option>
+                <option value="SECRETARY">قسم سكرتارية</option>
+              </Select>
+            </Field>
             <Field label="الهاتف"><Input value={form.phone} onChange={set("phone")} /></Field>
           </div>
 
@@ -204,9 +211,11 @@ export default function EmployeesManagement() {
               )) : <span className="soft">أضف خدمات أولًا من صفحة الخدمات</span>}
             </div>
           </Field>
-          <div style={{ fontWeight: 700, marginTop: 4 }}>حساب دخول العامل</div>
+          <div style={{ fontWeight: 700, marginTop: 4 }}>{form.role === "SECRETARY" ? "رقم دخول قسم السكرتارية" : "حساب دخول العامل"}</div>
           <p className="help-text" style={{ marginTop: -8 }}>
-            البريد وكلمة السر الخاصة بدخول العامل. كلمة السر القديمة لا تظهر إلا إذا كانت محفوظة بعد هذا التحديث.
+            {form.role === "SECRETARY"
+              ? "كلمة المرور هنا تعمل كرقم سري لفتح صفحة قسم السكرتارية. يمكن للمدير أيضاً الدخول بكلمة مروره."
+              : "البريد وكلمة السر الخاصة بدخول العامل. كلمة السر القديمة لا تظهر إلا إذا كانت محفوظة بعد هذا التحديث."}
           </p>
           <div className="grid grid-2">
             <Field label="بريد الدخول"><Input type="email" value={form.loginEmail} onChange={set("loginEmail")} /></Field>

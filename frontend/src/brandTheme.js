@@ -33,11 +33,8 @@ function mix(hex, target, amount) {
 export function applyBrandTheme(color) {
   const primary = hexToRgb(color) ? color : DEFAULTS.primary;
   const root = document.documentElement;
-  root.style.setProperty("--primary", primary);
-  root.style.setProperty("--primary-hover", mix(primary, "#000000", 0.28));
-  root.style.setProperty("--primary-soft", mix(primary, "#ffffff", 0.86));
-  root.style.setProperty("--primary-soft-2", mix(primary, "#ffffff", 0.72));
-  root.style.setProperty("--gradient", `linear-gradient(135deg, ${mix(primary, "#000000", 0.32)} 0%, ${primary} 58%, ${mix(primary, "#ffffff", 0.18)} 100%)`);
+  const vars = buildBrandThemeVars(primary);
+  Object.entries(vars).forEach(([key, value]) => root.style.setProperty(key, value));
 }
 
 export function resetBrandTheme() {
@@ -47,4 +44,15 @@ export function resetBrandTheme() {
   root.style.setProperty("--primary-soft", DEFAULTS.primarySoft);
   root.style.setProperty("--primary-soft-2", DEFAULTS.primarySoft2);
   root.style.setProperty("--gradient", "linear-gradient(135deg, #022c22 0%, #064e3b 58%, #0f766e 100%)");
+}
+
+export function buildBrandThemeVars(color) {
+  const primary = hexToRgb(color) ? color : DEFAULTS.primary;
+  return {
+    "--primary": primary,
+    "--primary-hover": mix(primary, "#000000", 0.28),
+    "--primary-soft": mix(primary, "#ffffff", 0.86),
+    "--primary-soft-2": mix(primary, "#ffffff", 0.72),
+    "--gradient": `linear-gradient(135deg, ${mix(primary, "#000000", 0.32)} 0%, ${primary} 58%, ${mix(primary, "#ffffff", 0.18)} 100%)`,
+  };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useBusinessManage } from "../context/BusinessManageContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { Spinner, Badge, StatCard, fmtPrice, fmtDate, fmtNumber } from "../components/ui.jsx";
@@ -42,9 +42,9 @@ export default function SubscriptionPage() {
           </div>
 
           <div className="grid grid-stats">
-            <StatCard icon="📆" value={fmtNumber(daysLeft)} label={t("remainingDays")} tone="primary" />
-            <StatCard icon="🗓️" value={fmtDate(sub.startsAt)} label={t("subscriptionStart")} tone="info" />
-            <StatCard icon="⏳" value={fmtDate(sub.endsAt)} label={t("subscriptionEnd")} tone="warning" />
+            <StatCard icon="□" value={fmtNumber(daysLeft)} label={t("remainingDays")} tone="primary" />
+            <StatCard icon="▣" value={fmtDate(sub.startsAt)} label={t("subscriptionStart")} tone="info" />
+            <StatCard icon="◷" value={fmtDate(sub.endsAt)} label={t("subscriptionEnd")} tone="warning" />
           </div>
 
           <div className="card card-pad mt-3">
@@ -60,3 +60,4 @@ export default function SubscriptionPage() {
     </>
   );
 }
+

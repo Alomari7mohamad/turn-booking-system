@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { ApiError } from "../utils/ApiError.js";
 import { mockGateway } from "./gateways/mock.gateway.js";
 import { logAudit, AUDIT } from "./audit.service.js";
+import { recordCustomerPayment } from "./customer.service.js";
 
 // ============================================================
 // طبقة الدفع المنفصلة. كل المنطق الخاص بالبوابة معزول هنا،
@@ -67,6 +68,10 @@ export async function settlePayment(reference, outcome) {
     entityId: appt.id,
     meta: { paymentStatus: updated.paymentStatus, by: "gateway", reference },
   });
+
+  if (updated.paymentStatus === "PAID") {
+    await recordCustomerPayment(prisma, updated);
+  }
 
   return updated;
 }

@@ -1,10 +1,13 @@
 ﻿import { prisma } from "../config/db.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
-import { hashPassword } from "../utils/password.js";
+import { comparePassword, hashPassword } from "../utils/password.js";
 import { dayBounds } from "../utils/time.js";
-import { assertSlotAvailable } from "../services/availability.service.js";
+import { assertSlotAvailable, getAvailability } from "../services/availability.service.js";
 import { logAudit, AUDIT } from "../services/audit.service.js";
+import { recordCustomerPayment } from "../services/customer.service.js";
+import { ensureAppointmentReviewToken, sendAppointmentReviewLink } from "../services/review.service.js";
+import { publicAppUrl } from "../services/whatsapp.service.js";
 
 // …„״§״­״¸״©: req.tenantId ״£״× …† middleware ״§„״¹״²„״ ˆƒ„ ״§״³״×״¹„״§… ‡†״§ …‚‘״¯ ״¨‡.
 
@@ -28,12 +31,13 @@ export const updateMyBusiness = asyncHandler(async (req, res) => {
   if (!existing) throw ApiError.notFound("Business not found");
 
   const data = {};
-  const businessInfoKeys = ["name", "email", "phone", "address", "logoUrl", "brandColor", "timezone"];
+  const businessInfoKeys = ["name", "email", "phone", "address", "mapUrl", "logoUrl", "bookingHeroImageUrl", "brandColor", "timezone"];
   businessInfoKeys.forEach((k) => {
     if (req.body[k] !== undefined) data[k] = req.body[k];
   });
 
   const paymentKeys = ["onlinePaymentEnabled", "payAtStoreEnabled"];
+  if (req.body.customerHubEnabled !== undefined) data.customerHubEnabled = Boolean(req.body.customerHubEnabled);
   const paymentChanged = paymentKeys.some((k) => req.body[k] !== undefined && existing[k] !== Boolean(req.body[k]));
   const businessInfoChanges = businessInfoKeys.filter((k) => {
     if (req.body[k] === undefined) return false;
@@ -103,6 +107,130 @@ export const getDashboard = asyncHandler(async (req, res) => {
   });
 });
 
+function normalizeCustomerPhone(phone) {
+  return String(phone || "").replace(/[^\d+]/g, "").trim();
+}
+
+function customerMonthBounds(month) {
+  const base = month && /^\d{4}-\d{2}$/.test(month)
+    ? new Date(`${month}-01T00:00:00`)
+    : new Date();
+  const start = new Date(base.getFullYear(), base.getMonth(), 1);
+  const end = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+  return { start, end, key: `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}` };
+}
+
+export const listCustomers = asyncHandler(async (req, res) => {
+  const business = await prisma.business.findUnique({
+    where: { id: req.tenantId },
+    select: { customerHubEnabled: true, customerPointsPercent: true },
+  });
+  if (!business?.customerHubEnabled) {
+    return res.json({
+      success: true,
+      enabled: false,
+      customerPointsPercent: business?.customerPointsPercent || 0,
+      customers: [],
+      summary: { customers: 0, monthlyVisits: 0, monthlyPaid: 0, points: 0 },
+    });
+  }
+
+  const { start, end, key } = customerMonthBounds(req.query.month);
+  const [customers, appointments] = await Promise.all([
+    prisma.customer.findMany({
+      where: { businessId: req.tenantId },
+      orderBy: [{ lastVisitAt: "desc" }, { updatedAt: "desc" }],
+    }),
+    prisma.appointment.findMany({
+      where: {
+        businessId: req.tenantId,
+        startAt: { gte: start, lt: end },
+        status: { not: "CANCELLED" },
+      },
+      select: {
+        customerPhone: true,
+        paymentStatus: true,
+        paymentAmount: true,
+        paymentMethod: true,
+        status: true,
+      },
+    }),
+  ]);
+
+  const monthlyByPhone = new Map();
+  appointments.forEach((appointment) => {
+    const phone = normalizeCustomerPhone(appointment.customerPhone);
+    if (!phone) return;
+    const item = monthlyByPhone.get(phone) || { visits: 0, paid: 0, noShow: 0 };
+    item.visits += 1;
+    if (appointment.status === "NO_SHOW") item.noShow += 1;
+    if (appointment.paymentStatus === "PAID" && !(appointment.status === "NO_SHOW" && appointment.paymentMethod === "ONLINE")) {
+      item.paid += Number(appointment.paymentAmount || 0);
+    }
+    monthlyByPhone.set(phone, item);
+  });
+
+  const rows = customers.map((customer) => {
+    const monthly = monthlyByPhone.get(normalizeCustomerPhone(customer.phone)) || { visits: 0, paid: 0, noShow: 0 };
+    return { ...customer, monthly };
+  });
+
+  res.json({
+    success: true,
+    enabled: true,
+    month: key,
+    customerPointsPercent: business.customerPointsPercent || 0,
+    customers: rows,
+    summary: {
+      customers: rows.length,
+      monthlyVisits: rows.reduce((sum, customer) => sum + customer.monthly.visits, 0),
+      monthlyPaid: rows.reduce((sum, customer) => sum + customer.monthly.paid, 0),
+      points: rows.reduce((sum, customer) => sum + Number(customer.points || 0), 0),
+    },
+  });
+});
+
+export const updateCustomerSettings = asyncHandler(async (req, res) => {
+  const percent = Number(req.body.customerPointsPercent || 0);
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+    throw ApiError.badRequest("نسبة النقاط يجب أن تكون بين 0 و 100");
+  }
+  const business = await prisma.business.update({
+    where: { id: req.tenantId },
+    data: { customerPointsPercent: percent },
+    select: { customerHubEnabled: true, customerPointsPercent: true },
+  });
+  res.json({ success: true, business });
+});
+
+export const listCustomerReviews = asyncHandler(async (req, res) => {
+  const phone = normalizeCustomerPhone(req.params.phone);
+  if (phone.length < 6) throw ApiError.badRequest("رقم الهاتف غير صالح");
+
+  const appointments = await prisma.appointment.findMany({
+    where: { businessId: req.tenantId },
+    select: { id: true, customerPhone: true },
+  });
+  const appointmentIds = appointments
+    .filter((appointment) => normalizeCustomerPhone(appointment.customerPhone) === phone)
+    .map((appointment) => appointment.id);
+
+  if (!appointmentIds.length) {
+    return res.json({ success: true, reviews: [] });
+  }
+
+  const reviews = await prisma.review.findMany({
+    where: { businessId: req.tenantId, appointmentId: { in: appointmentIds } },
+    orderBy: { createdAt: "desc" },
+    include: {
+      appointment: { select: { id: true, customerName: true, customerPhone: true, startAt: true } },
+      service: { select: { name: true } },
+      employee: { select: { name: true, title: true } },
+    },
+  });
+  res.json({ success: true, reviews });
+});
+
 // ============ ״§„…ˆ״¸ˆ† ============
 // GET /api/business/employees
 export const listEmployees = asyncHandler(async (req, res) => {
@@ -125,7 +253,7 @@ export const listEmployees = asyncHandler(async (req, res) => {
 
 // POST /api/business/employees ג€” ״¯״¹… ״¥†״´״§״¡ ״­״³״§״¨ ״¯״®ˆ„ STAFF ״§״®״×״§״±‹״§
 export const createEmployee = asyncHandler(async (req, res) => {
-  const { name, phone, title, serviceIds = [], loginEmail, loginPassword } = req.body;
+  const { name, phone, title, role = "PROVIDER", serviceIds = [], loginEmail, loginPassword } = req.body;
   if (!name) throw ApiError.badRequest("״§״³… ״§„…ˆ״¸ …״·„ˆ״¨");
 
   const employee = await prisma.$transaction(async (tx) => {
@@ -146,7 +274,7 @@ export const createEmployee = asyncHandler(async (req, res) => {
     }
 
     const emp = await tx.employee.create({
-      data: { businessId: req.tenantId, name, phone, title, userId, loginPassword: loginPassword || null },
+      data: { businessId: req.tenantId, name, phone, title, role, userId, loginPassword: loginPassword || null },
     });
 
     if (serviceIds.length) {
@@ -174,13 +302,14 @@ export const updateEmployee = asyncHandler(async (req, res) => {
   });
   if (!existing) throw ApiError.notFound("״§„…ˆ״¸ ״÷״± …ˆ״¬ˆ״¯");
 
-  const { name, phone, title, isActive, serviceIds, loginEmail, loginPassword } = req.body;
+  const { name, phone, title, role, isActive, serviceIds, loginEmail, loginPassword } = req.body;
 
   await prisma.$transaction(async (tx) => {
     const data = {};
     if (name !== undefined) data.name = name;
     if (phone !== undefined) data.phone = phone;
     if (title !== undefined) data.title = title;
+    if (role !== undefined) data.role = role || "PROVIDER";
     if (isActive !== undefined) data.isActive = Boolean(isActive);
     if (loginPassword !== undefined) data.loginPassword = loginPassword || null;
 
@@ -254,7 +383,7 @@ export const listServices = asyncHandler(async (req, res) => {
 
 // POST /api/business/services
 export const createService = asyncHandler(async (req, res) => {
-  const { name, description, durationMinutes, price, serviceHours = [] } = req.body;
+  const { name, description, imageUrl, durationMinutes, price, serviceHours = [] } = req.body;
   if (!name || !durationMinutes) throw ApiError.badRequest("Service name and duration are required");
   const service = await prisma.$transaction(async (tx) => {
     const created = await tx.service.create({
@@ -262,6 +391,7 @@ export const createService = asyncHandler(async (req, res) => {
         businessId: req.tenantId,
         name,
         description: description || null,
+        imageUrl: imageUrl || null,
         durationMinutes: Number(durationMinutes),
         price: price ? Number(price) : 0,
       },
@@ -295,6 +425,7 @@ export const updateService = asyncHandler(async (req, res) => {
   const data = {};
   if (req.body.name !== undefined) data.name = req.body.name;
   if (req.body.description !== undefined) data.description = req.body.description;
+  if (req.body.imageUrl !== undefined) data.imageUrl = req.body.imageUrl || null;
   if (req.body.durationMinutes !== undefined) data.durationMinutes = Number(req.body.durationMinutes);
   if (req.body.price !== undefined) data.price = Number(req.body.price);
   if (req.body.isActive !== undefined) data.isActive = Boolean(req.body.isActive);
@@ -350,8 +481,7 @@ export const setWorkingHours = asyncHandler(async (req, res) => {
 
   await prisma.$transaction(async (tx) => {
     await tx.workingHours.deleteMany({ where: { businessId: req.tenantId, employeeId: null, serviceId: null } });
-    await tx.workingHours.createMany({
-      data: days.map((d) => ({
+    const normalizedDays = days.map((d) => ({
         businessId: req.tenantId,
         employeeId: null,
         serviceId: null,
@@ -361,8 +491,25 @@ export const setWorkingHours = asyncHandler(async (req, res) => {
         breakStartTime: d.breakStartTime || null,
         breakEndTime: d.breakEndTime || null,
         isClosed: Boolean(d.isClosed),
-      })),
+      }));
+
+    await tx.workingHours.createMany({
+      data: normalizedDays,
     });
+
+    await Promise.all(
+      normalizedDays.map((day) =>
+        tx.workingHours.updateMany({
+          where: {
+            businessId: req.tenantId,
+            employeeId: null,
+            serviceId: { not: null },
+            dayOfWeek: day.dayOfWeek,
+          },
+          data: { isClosed: day.isClosed },
+        })
+      )
+    );
   });
 
   await logAudit({
@@ -514,6 +661,7 @@ export const listAppointments = asyncHandler(async (req, res) => {
     include: {
       service: { select: { name: true, durationMinutes: true, price: true } },
       employee: { select: { name: true } },
+      review: { select: { id: true, serviceRating: true, employeeRating: true, businessRating: true, createdAt: true } },
     },
   });
   res.json({ success: true, appointments });
@@ -551,7 +699,17 @@ export const updateAppointment = asyncHandler(async (req, res) => {
     data.endAt = end;
   }
 
-  const appointment = await prisma.appointment.update({ where: { id }, data });
+  let appointment = await prisma.appointment.update({ where: { id }, data });
+  if (data.status === "COMPLETED") {
+    const business = await prisma.business.findUnique({
+      where: { id: req.tenantId },
+      select: { reviewsEnabled: true },
+    });
+    if (business?.reviewsEnabled) {
+      const reviewToken = await ensureAppointmentReviewToken(prisma, id);
+      appointment = { ...appointment, reviewToken };
+    }
+  }
   if (data.status === "CONFIRMED" || data.status === "CANCELLED") {
     await prisma.notification.create({
       data: {
@@ -573,6 +731,27 @@ export const updateAppointment = asyncHandler(async (req, res) => {
     meta: { changes: Object.keys(data) },
   });
   res.json({ success: true, appointment });
+});
+
+// POST /api/business/appointments/:id/review-link
+export const createAppointmentReviewLink = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const appointment = await prisma.appointment.findFirst({
+    where: { id, businessId: req.tenantId },
+    include: {
+      business: { select: { id: true, name: true, reviewsEnabled: true } },
+      review: { select: { id: true } },
+    },
+  });
+  if (!appointment) throw ApiError.notFound("الحجز غير موجود");
+  if (!appointment.business.reviewsEnabled) throw ApiError.badRequest("نظام التقييمات غير مفعّل لهذا المحل");
+  if (appointment.status !== "COMPLETED") throw ApiError.badRequest("يمكن إرسال رابط التقييم بعد اكتمال الحجز فقط");
+  if (appointment.review) throw ApiError.badRequest("تم تقييم هذا الحجز مسبقًا");
+
+  const reviewToken = await ensureAppointmentReviewToken(prisma, appointment.id);
+  const reviewUrl = `${publicAppUrl(req)}/review/${reviewToken}`;
+  const sendResult = await sendAppointmentReviewLink(prisma, appointment.id, req);
+  res.json({ success: true, token: reviewToken, path: `/review/${reviewToken}`, url: reviewUrl, whatsapp: sendResult.whatsapp });
 });
 
 // PATCH /api/business/appointments/:id/delay
@@ -637,6 +816,100 @@ export const delayAppointment = asyncHandler(async (req, res) => {
   res.json({ success: true, appointments: shifted });
 });
 
+function todayInput() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// GET /api/business/appointments/:id/requeue-options?date=
+export const getAppointmentRequeueOptions = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const appointment = await prisma.appointment.findFirst({
+    where: { id, businessId: req.tenantId },
+    include: {
+      service: { select: { id: true, name: true, durationMinutes: true } },
+      employee: { select: { id: true, name: true } },
+    },
+  });
+  if (!appointment) throw ApiError.notFound("الموعد غير موجود");
+
+  const date = req.query.date || todayInput();
+  const [originalSlots, allSlots] = await Promise.all([
+    getAvailability({
+      businessId: req.tenantId,
+      serviceId: appointment.serviceId,
+      employeeId: appointment.employeeId,
+      date,
+    }),
+    getAvailability({
+      businessId: req.tenantId,
+      serviceId: appointment.serviceId,
+      date,
+    }),
+  ]);
+
+  const alternatives = allSlots.filter((slot) => slot.employeeId !== appointment.employeeId);
+  res.json({
+    success: true,
+    appointment,
+    originalEmployee: appointment.employee,
+    originalSlots: originalSlots.slice(0, 8),
+    alternativeSlots: alternatives.slice(0, 12),
+  });
+});
+
+// PATCH /api/business/appointments/:id/requeue
+export const requeueAppointment = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const employeeId = Number(req.body.employeeId);
+  const start = new Date(req.body.startAt);
+  if (!employeeId || Number.isNaN(start.getTime())) {
+    throw ApiError.badRequest("اختر العامل والوقت");
+  }
+
+  const appointment = await prisma.appointment.findFirst({
+    where: { id, businessId: req.tenantId },
+    include: { service: { select: { durationMinutes: true } } },
+  });
+  if (!appointment) throw ApiError.notFound("الموعد غير موجود");
+
+  const end = new Date(start.getTime() + appointment.service.durationMinutes * 60000);
+  await assertSlotAvailable(prisma, {
+    businessId: req.tenantId,
+    employeeId,
+    serviceId: appointment.serviceId,
+    start,
+    end,
+    excludeId: appointment.id,
+  });
+
+  const updated = await prisma.appointment.update({
+    where: { id },
+    data: {
+      employeeId,
+      startAt: start,
+      endAt: end,
+      status: "CONFIRMED",
+      notes: `${appointment.notes || ""}\nإعادة للدور عبر إدارة الحجوزات`.trim(),
+    },
+    include: {
+      service: { select: { name: true, durationMinutes: true, price: true } },
+      employee: { select: { id: true, name: true } },
+    },
+  });
+
+  await logAudit({
+    businessId: req.tenantId,
+    userId: req.user.id,
+    actorName: req.user.name,
+    action: AUDIT.BOOKING_UPDATED,
+    entityType: "Appointment",
+    entityId: id,
+    meta: { requeued: true, employeeId, startAt: start },
+  });
+
+  res.json({ success: true, appointment: updated });
+});
+
 // DELETE /api/business/appointments/:id ג€” ״¥„״÷״§״¡
 export const cancelAppointment = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
@@ -678,11 +951,16 @@ export const updateAppointmentPayment = asyncHandler(async (req, res) => {
     throw ApiError.forbidden("„״§ …ƒ† ״×״¹״¯„ ״­״§„״© ״§„״¯״¹ ״§„״¥„ƒ״×״±ˆ† ״¯ˆ‹״§ (״×״·„‘״¨ ״µ„״§״­״© ״§„״¥״¯״§״±״©)");
   }
 
+  const serviceForPayment = paymentStatus === "PAID" && existing.paymentAmount == null
+    ? await prisma.service.findUnique({ where: { id: existing.serviceId }, select: { price: true } })
+    : null;
   const appointment = await prisma.appointment.update({
     where: { id },
     data: {
       paymentStatus,
       paidAt: paymentStatus === "PAID" ? new Date() : null,
+      ...(serviceForPayment ? { paymentAmount: serviceForPayment.price } : {}),
+      ...(paymentStatus === "PAID" ? { status: "COMPLETED" } : {}),
     },
   });
   await logAudit({
@@ -694,7 +972,198 @@ export const updateAppointmentPayment = asyncHandler(async (req, res) => {
     entityId: id,
     meta: { paymentStatus, by: "owner" },
   });
+  if (appointment.paymentStatus === "PAID") {
+    await recordCustomerPayment(prisma, appointment);
+    await sendAppointmentReviewLink(prisma, appointment.id, req).catch(() => null);
+  }
   res.json({ success: true, appointment });
+});
+
+function todayDateInput() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function ticketBusiness(business) {
+  return {
+    name: business.name,
+    logoUrl: business.logoUrl,
+    brandColor: business.brandColor,
+  };
+}
+
+function dailyAppointmentNumber(appointments, appointmentId) {
+  const index = appointments.findIndex((item) => item.id === appointmentId);
+  return index >= 0 ? index + 1 : appointments.length + 1;
+}
+
+async function buildQueueTicket({ businessId, appointment, business, ticketType = "SCHEDULED", note = null }) {
+  const { start, end } = dayBounds(appointment.startAt.toISOString().slice(0, 10));
+  const confirmedAppointments = await prisma.appointment.findMany({
+    where: {
+      businessId,
+      status: "CONFIRMED",
+      startAt: { gte: start, lt: end },
+    },
+    orderBy: [{ startAt: "asc" }, { id: "asc" }],
+    include: {
+      service: { select: { name: true } },
+      employee: { select: { name: true } },
+    },
+  });
+  const index = confirmedAppointments.findIndex((item) => item.id === appointment.id);
+  const bookingNumber = dailyAppointmentNumber(confirmedAppointments, appointment.id);
+  return {
+    queueNumber: index >= 0 ? index + 1 : confirmedAppointments.length + 1,
+    peopleAhead: Math.max(0, index),
+    bookingNumber,
+    appointmentId: appointment.id,
+    customerName: appointment.customerName,
+    customerPhone: appointment.customerPhone,
+    service: appointment.service?.name,
+    employee: appointment.employee?.name,
+    startAt: appointment.startAt,
+    endAt: appointment.endAt,
+    status: appointment.status,
+    ticketType,
+    note,
+    queueRule: "حسب وقت الموعد في جدول اليوم",
+    business: ticketBusiness(business),
+  };
+}
+
+// POST /api/business/secretary/session
+export const openSecretarySession = asyncHandler(async (req, res) => {
+  const { pin } = req.body;
+  const cleanPin = String(pin || "").trim();
+  if (!cleanPin) throw ApiError.badRequest("أدخل الرقم السري");
+
+  const business = await prisma.business.findUnique({ where: { id: req.tenantId } });
+  if (!business?.printScreenEnabled) throw ApiError.forbidden("صفحة السكرتيرة متاحة فقط عند تفعيل شاشة طباعة الأدوار");
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { id: true, name: true, role: true, passwordHash: true },
+  });
+  if (currentUser && await comparePassword(cleanPin, currentUser.passwordHash)) {
+    return res.json({
+      success: true,
+      actor: { id: currentUser.id, name: currentUser.name, role: currentUser.role },
+    });
+  }
+
+  const employees = await prisma.employee.findMany({
+    where: {
+      businessId: req.tenantId,
+      isActive: true,
+      role: "SECRETARY",
+      loginPassword: { not: null },
+    },
+    select: { id: true, name: true, role: true, loginPassword: true },
+  });
+  const secretary = employees.find((employee) => employee.loginPassword === cleanPin);
+  if (!secretary) throw ApiError.unauthorized("الرقم السري غير صحيح أو الموظف ليس بدور سكرتير/ة");
+
+  res.json({
+    success: true,
+    actor: { id: secretary.id, name: secretary.name, role: "SECRETARY" },
+  });
+});
+
+// GET /api/business/secretary/today?employeeId=
+export const secretaryToday = asyncHandler(async (req, res) => {
+  const business = await prisma.business.findUnique({ where: { id: req.tenantId } });
+  if (!business?.printScreenEnabled) throw ApiError.forbidden("صفحة السكرتيرة متاحة فقط عند تفعيل شاشة طباعة الأدوار");
+
+  const date = req.query.date || todayDateInput();
+  const { start, end } = dayBounds(date);
+  const where = {
+    businessId: req.tenantId,
+    startAt: { gte: start, lt: end },
+  };
+  if (req.query.employeeId) where.employeeId = Number(req.query.employeeId);
+
+  const appointments = await prisma.appointment.findMany({
+    where,
+    orderBy: [{ startAt: "asc" }, { id: "asc" }],
+    include: {
+      service: { select: { name: true, durationMinutes: true, price: true } },
+      employee: { select: { id: true, name: true } },
+    },
+  });
+  const employees = await prisma.employee.findMany({
+    where: { businessId: req.tenantId, isActive: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, title: true },
+  });
+
+  res.json({ success: true, business, employees, appointments });
+});
+
+// POST /api/business/secretary/late-ticket
+export const secretaryLateTicket = asyncHandler(async (req, res) => {
+  const appointmentId = Number(req.body.appointmentId);
+  const business = await prisma.business.findUnique({ where: { id: req.tenantId } });
+  if (!business?.printScreenEnabled) throw ApiError.forbidden("صفحة السكرتيرة متاحة فقط عند تفعيل شاشة طباعة الأدوار");
+  if (!appointmentId) throw ApiError.badRequest("اختر الحجز أولًا");
+
+  const appointment = await prisma.appointment.findFirst({
+    where: { id: appointmentId, businessId: req.tenantId },
+    include: {
+      service: { select: { id: true, name: true, durationMinutes: true } },
+      employee: { select: { id: true, name: true } },
+    },
+  });
+  if (!appointment) throw ApiError.notFound("الحجز غير موجود");
+  if (appointment.status !== "CONFIRMED") throw ApiError.badRequest("لا يمكن إصدار ورقة دخول إلا لحجز مؤكد");
+
+  const now = new Date();
+  if (now <= appointment.endAt) {
+    throw ApiError.badRequest("هذا الحجز لم ينته وقته بعد، استخدم ورقة الدور العادية");
+  }
+  const start = new Date(now.getTime() + 60 * 1000);
+  const end = new Date(start.getTime() + appointment.service.durationMinutes * 60000);
+
+  await assertSlotAvailable(prisma, {
+    businessId: req.tenantId,
+    employeeId: appointment.employeeId,
+    serviceId: appointment.serviceId,
+    start,
+    end,
+    excludeId: appointment.id,
+  });
+
+  const updated = await prisma.appointment.update({
+    where: { id: appointment.id },
+    data: {
+      startAt: start,
+      endAt: end,
+      notes: `${appointment.notes || ""}\nإدخال متأخر عبر السكرتيرة`.trim(),
+    },
+    include: {
+      service: { select: { name: true, durationMinutes: true } },
+      employee: { select: { name: true } },
+    },
+  });
+
+  const ticket = await buildQueueTicket({
+    businessId: req.tenantId,
+    appointment: updated,
+    business,
+    ticketType: "LATE_ENTRY",
+    note: "ورقة دخول متأخر - تم فحص توفر العامل الآن",
+  });
+
+  await logAudit({
+    businessId: req.tenantId,
+    userId: req.user.id,
+    actorName: req.user.name,
+    action: AUDIT.BOOKING_UPDATED,
+    entityType: "Appointment",
+    entityId: appointment.id,
+    meta: { secretaryLateEntry: true },
+  });
+
+  res.json({ success: true, ticket, appointment: updated });
 });
 
 // GET /api/business/audit-logs ג€” ״³״¬„‘ †״´״§״· ״§„…״­„ (״¢״®״± 100 ״­״¯״«)

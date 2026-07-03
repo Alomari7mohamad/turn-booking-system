@@ -6,6 +6,9 @@ import {
   getMyBusiness,
   updateMyBusiness,
   getDashboard,
+  listCustomers,
+  updateCustomerSettings,
+  listCustomerReviews,
   listEmployees,
   createEmployee,
   updateEmployee,
@@ -23,9 +26,15 @@ import {
   deleteBlockedTime,
   listAppointments,
   updateAppointment,
+  createAppointmentReviewLink,
   delayAppointment,
+  getAppointmentRequeueOptions,
+  requeueAppointment,
   cancelAppointment,
   updateAppointmentPayment,
+  secretaryToday,
+  secretaryLateTicket,
+  openSecretarySession,
   listAuditLogs,
   listNotifications,
   markNotificationsRead,
@@ -40,6 +49,9 @@ router.use(authenticate, authorize("BUSINESS_OWNER"), resolveTenant, requireTena
 router.get("/me", getMyBusiness);
 router.patch("/me", updateMyBusiness);
 router.get("/dashboard", getDashboard);
+router.get("/customers", listCustomers);
+router.patch("/customers/settings", updateCustomerSettings);
+router.get("/customers/:phone/reviews", listCustomerReviews);
 
 router.get("/employees", listEmployees);
 router.post("/employees", createEmployee);
@@ -62,9 +74,16 @@ router.delete("/blocked-times/:id", deleteBlockedTime);
 
 router.get("/appointments", listAppointments);
 router.patch("/appointments/:id/payment", updateAppointmentPayment);
+router.post("/appointments/:id/review-link", createAppointmentReviewLink);
 router.patch("/appointments/:id/delay", delayAppointment);
+router.get("/appointments/:id/requeue-options", getAppointmentRequeueOptions);
+router.patch("/appointments/:id/requeue", requeueAppointment);
 router.patch("/appointments/:id", updateAppointment);
 router.delete("/appointments/:id", cancelAppointment);
+
+router.get("/secretary/today", secretaryToday);
+router.post("/secretary/late-ticket", secretaryLateTicket);
+router.post("/secretary/session", openSecretarySession);
 
 router.get("/audit-logs", listAuditLogs);
 router.get("/notifications", listNotifications);

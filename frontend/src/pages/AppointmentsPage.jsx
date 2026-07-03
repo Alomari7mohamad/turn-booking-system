@@ -32,15 +32,15 @@ function rangeFor(kind) {
 
 function filterByMode(items, mode) {
   if (mode === "rejected") return items.filter((item) => item.status === "CANCELLED");
-  return items.filter((item) => item.status === "CONFIRMED");
+  return items.filter((item) => ["CONFIRMED", "COMPLETED"].includes(item.status));
 }
 
 export default function AppointmentsPage({ mode = "bookings" }) {
   const toast = useToast();
-  const { api, isAdminManaging } = useBusinessManage();
+  const { api } = useBusinessManage();
   const [appointments, setAppointments] = useState(null);
   const [employees, setEmployees] = useState([]);
-  const [range, setRange] = useState("week");
+  const [range, setRange] = useState("today");
   const [employeeId, setEmployeeId] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
   const [lateTarget, setLateTarget] = useState(null);
@@ -66,16 +66,6 @@ export default function AppointmentsPage({ mode = "bookings" }) {
     try {
       await api.updateAppointment(id, { status: newStatus });
       toast.success(successMessage);
-      load();
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  const changePayment = async (id, ps) => {
-    try {
-      await api.updateAppointmentPayment(id, ps);
-      toast.success("تم تحديث حالة الدفع");
       load();
     } catch (err) {
       toast.error(err.message);
@@ -169,9 +159,9 @@ export default function AppointmentsPage({ mode = "bookings" }) {
               </thead>
               <tbody>
                 {visibleAppointments.map((appointment) => {
-                  const paidLocked = appointment.paymentStatus === "PAID";
                   const amount = Number(appointment.paymentAmount ?? appointment.service?.price ?? 0);
                   const isFree = amount === 0;
+                  const isRejected = appointment.status === "CANCELLED";
                   return (
                     <tr key={appointment.id}>
                       <td style={{ fontWeight: 600 }}>{appointment.customerName}<div className="soft" style={{ fontSize: 12 }}>{appointment.customerPhone}</div></td>
@@ -180,22 +170,22 @@ export default function AppointmentsPage({ mode = "bookings" }) {
                       <td>{fmtDate(appointment.startAt)}<div className="soft" style={{ fontSize: 12 }}>{fmtTime(appointment.startAt)} - {fmtTime(appointment.endAt)}</div></td>
                       <td><Badge tone={STATUS_META[appointment.status]?.tone}>{STATUS_META[appointment.status]?.label}</Badge></td>
                       <td>
+                        {isRejected ? <span className="soft">-</span> : <>
                         <div className="soft" style={{ fontSize: 12, marginBottom: 4 }}>
                           {isFree ? "بدون دفع" : appointment.paymentMethod ? PAYMENT_METHOD_META[appointment.paymentMethod]?.label : "-"}
                           {!isFree && appointment.paymentAmount ? ` - ${fmtPrice(appointment.paymentAmount)}` : ""}
                         </div>
                         {isFree ? (
                           <Badge tone="success">الخدمة مجانية</Badge>
-                        ) : !paidLocked && (appointment.paymentMethod === "PAY_AT_STORE" || isAdminManaging) ? (
-                          <Select value={appointment.paymentStatus} onChange={(e) => changePayment(appointment.id, e.target.value)} style={{ width: "auto", padding: "5px 8px", fontSize: 12.5 }}>
-                            {Object.entries(PAYMENT_STATUS_META).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
-                          </Select>
                         ) : (
                           <Badge tone={PAYMENT_STATUS_META[appointment.paymentStatus]?.tone}>{PAYMENT_STATUS_META[appointment.paymentStatus]?.label}</Badge>
                         )}
+                        </>}
                       </td>
                       <td>
-                        {mode === "bookings" ? (
+                        {mode === "bookings" && (appointment.paymentStatus === "PAID" || appointment.status === "COMPLETED") ? (
+                          <Badge tone="success">الزبون حضر</Badge>
+                        ) : mode === "bookings" ? (
                           <Select value="" onChange={(e) => handleAction(appointment, e.target.value)} style={{ width: "auto", padding: "6px 10px", fontSize: 13 }}>
                             <option value="">اختر إجراء</option>
                             <option value="LATE">تأخر</option>

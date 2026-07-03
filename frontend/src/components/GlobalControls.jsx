@@ -88,6 +88,71 @@ const copy = {
   },
 };
 
+const cleanA11yCopy = {
+  ar: {
+    title: "أدوات إمكانية الوصول",
+    subtitle: "قم بتخصيص تجربتك لتناسب احتياجاتك",
+    fontSize: "حجم النص",
+    colorModes: "أوضاع الألوان",
+    grayscale: "تدرج الرمادي",
+    invert: "عكس الألوان",
+    lowSaturation: "تشبع منخفض",
+    colorFilter: "فلتر عمى الألوان",
+    none: "لا شيء",
+    red: "أحمر",
+    blueYellow: "أزرق-أصفر",
+    redGreen: "أحمر-أخضر",
+    visual: "خيارات بصرية",
+    contrast: "تباين عالي",
+    bigText: "نص كبير",
+    highlightLinks: "تسليط الضوء على الروابط",
+    underlineLinks: "تسطير الروابط",
+    hideImages: "إخفاء الصور",
+    text: "خيارات النص",
+    readableFont: "خط قابل للقراءة",
+    lineSpacing: "زيادة المسافة بين الأسطر",
+    letterSpacing: "مسافة بين الحروف",
+    alignLeft: "محاذاة النص لليسار",
+    navigation: "خيارات التنقل",
+    bigCursor: "مؤشر كبير",
+    reduceMotion: "تقليل الحركة",
+    stopAnimations: "إيقاف الرسوم المتحركة",
+    reset: "إعادة تعيين إلى الافتراضي",
+    close: "إغلاق",
+  },
+  he: {
+    title: "כלי נגישות",
+    subtitle: "התאימו את חוויית השימוש לצרכים שלכם",
+    fontSize: "גודל טקסט",
+    colorModes: "מצבי צבע",
+    grayscale: "גווני אפור",
+    invert: "היפוך צבעים",
+    lowSaturation: "רוויה נמוכה",
+    colorFilter: "מסנן עיוורון צבעים",
+    none: "ללא",
+    red: "אדום",
+    blueYellow: "כחול-צהוב",
+    redGreen: "אדום-ירוק",
+    visual: "אפשרויות חזותיות",
+    contrast: "ניגודיות גבוהה",
+    bigText: "טקסט גדול",
+    highlightLinks: "הדגשת קישורים",
+    underlineLinks: "קו תחתון לקישורים",
+    hideImages: "הסתרת תמונות",
+    text: "אפשרויות טקסט",
+    readableFont: "גופן קריא",
+    lineSpacing: "הגדלת רווח בין שורות",
+    letterSpacing: "רווח בין אותיות",
+    alignLeft: "יישור טקסט לשמאל",
+    navigation: "אפשרויות ניווט",
+    bigCursor: "סמן גדול",
+    reduceMotion: "הפחתת תנועה",
+    stopAnimations: "עצירת אנימציות",
+    reset: "איפוס לברירת מחדל",
+    close: "סגירה",
+  },
+};
+
 const textTranslations = new Map(Object.entries({
   "لوحة التحكم": "לוח בקרה",
   "إدارة المحلات": "ניהול עסקים",
@@ -234,7 +299,7 @@ export function GlobalControls() {
   const { language, t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState(loadA11y);
-  const a = copy[language] || copy.ar;
+  const a = cleanA11yCopy[language] || cleanA11yCopy.ar;
 
   useEffect(() => {
     applyA11y(settings);
@@ -308,11 +373,11 @@ export function GlobalControls() {
                 <IconText />
               </div>
               <div className="a11y-font-control">
-                <button type="button" onClick={() => changeFont(0.1)} aria-label="+">⌕+</button>
+                <button type="button" onClick={() => changeFont(0.1)} aria-label="+">+</button>
                 <div className="a11y-font-track" aria-hidden="true">
                   <span style={{ width: `${Math.min(100, Math.max(0, ((settings.fontScale - 0.85) / 0.75) * 100))}%` }} />
                 </div>
-                <button type="button" onClick={() => changeFont(-0.1)} aria-label="-">⌕-</button>
+                <button type="button" onClick={() => changeFont(-0.1)} aria-label="-">-</button>
                 <b>{Math.round(settings.fontScale * 100)}%</b>
               </div>
             </section>

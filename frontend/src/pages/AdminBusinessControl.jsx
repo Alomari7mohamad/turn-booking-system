@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useParams } from "react-router-dom";
 import { adminApi, adminManagedBusinessApi } from "../api/endpoints.js";
 import { BusinessManageProvider } from "../context/BusinessManageContext.jsx";
@@ -6,10 +6,15 @@ import { Spinner, EmptyState } from "../components/ui.jsx";
 
 const TABS = [
   { to: "", label: "لوحة المحل", end: true },
+  { to: "statistics", label: "الإحصائيات" },
+  { to: "customers", label: "الزبائن" },
   { to: "appointments", label: "الحجوزات" },
+  { to: "appointments/manage", label: "إدارة الحجوزات" },
   { to: "appointments/rejected", label: "الحجوزات التي تم رفضها" },
   { to: "services", label: "الخدمات" },
-  { to: "employees", label: "الموظفون" },
+  { to: "employees", label: "العاملون" },
+  { to: "secretary", label: "السكرتارية" },
+  { to: "accounts", label: "قسم الحسابات والفواتير" },
   { to: "working-hours", label: "ساعات العمل" },
   { to: "settings", label: "الإعدادات" },
   { to: "subscription", label: "الاشتراك" },
@@ -28,7 +33,7 @@ export default function AdminBusinessControl() {
   const api = useMemo(() => adminManagedBusinessApi(businessId), [businessId]);
   const basePath = `/admin/businesses/${businessId}/control`;
 
-  if (error) return <EmptyState icon="🏪" title="تعذر فتح المحل" hint="تحقق من أن المحل موجود ثم حاول مرة أخرى" />;
+  if (error) return <EmptyState icon="▣" title="تعذر فتح المحل" hint="تحقق من أن المحل موجود ثم حاول مرة أخرى" />;
   if (!business) return <Spinner page />;
 
   return (
@@ -59,3 +64,4 @@ export default function AdminBusinessControl() {
     </BusinessManageProvider>
   );
 }
+

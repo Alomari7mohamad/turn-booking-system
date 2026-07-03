@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
@@ -10,36 +10,58 @@ import { businessApi } from "../api/endpoints.js";
 
 const NAV = {
   SUPER_ADMIN: [
-    { to: "/admin", icon: "📊", labelKey: "navDashboard", end: true },
-    { to: "/admin/businesses", icon: "🏢", labelKey: "navBusinesses" },
-    { to: "/admin/managers", icon: "👥", labelKey: "navManagers" },
+    { to: "/admin", icon: "▦", labelKey: "navDashboard", end: true },
+    { to: "/admin/statistics", icon: "▥", labelKey: "navStatistics" },
+    { to: "/admin/businesses", icon: "▣", labelKey: "navBusinesses" },
+    { to: "/admin/managers", icon: "◉", labelKey: "navManagers" },
   ],
   BUSINESS_OWNER: [
-    { to: "/dashboard", icon: "📊", labelKey: "navDashboard", end: true },
-    { to: "/dashboard/appointments", icon: "📅", labelKey: "navAppointments" },
-    { to: "/dashboard/appointments/rejected", icon: "🚫", labelKey: "navRejectedAppointments" },
-    { to: "/dashboard/services", icon: "✂️", labelKey: "navServices" },
-    { to: "/dashboard/employees", icon: "👥", labelKey: "navEmployees" },
-    { to: "/dashboard/working-hours", icon: "🕐", labelKey: "navWorkingHours" },
-    { to: "/dashboard/subscription", icon: "💳", labelKey: "navSubscription" },
-    { to: "/dashboard/activity", icon: "📋", labelKey: "navActivity" },
-    { to: "/dashboard/settings", icon: "⚙️", labelKey: "navSettings" },
+    { to: "/dashboard", icon: "▦", labelKey: "navDashboard", end: true },
+    { to: "/dashboard/statistics", icon: "▥", labelKey: "navStatistics" },
+    { to: "/dashboard/customers", icon: "◎", labelKey: "navCustomers", requiresCustomerHub: true },
+    {
+      to: "/dashboard/appointments",
+      icon: "□",
+      labelKey: "navAppointments",
+      children: [
+        { to: "/dashboard/appointments/manage", labelKey: "navAppointmentsManagement" },
+        { to: "/dashboard/appointments/rejected", labelKey: "navRejectedAppointments" },
+      ],
+    },
+    { to: "/dashboard/services", icon: "◇", labelKey: "navServices" },
+    { to: "/dashboard/employees", icon: "◉", labelKey: "navEmployees" },
+    {
+      to: "/dashboard/accounts",
+      icon: "₪",
+      labelKey: "navAccounts",
+      children: [
+        { to: "/dashboard/accounts", labelKey: "navAccountsOverview", end: true },
+        { to: "/dashboard/accounts/payments", labelKey: "navAppointmentPayments" },
+      ],
+    },
+    { to: "/dashboard/working-hours", icon: "◷", labelKey: "navWorkingHours" },
+    { to: "/dashboard/subscription", icon: "◇", labelKey: "navSubscription" },
+    { to: "/dashboard/activity", icon: "☷", labelKey: "navActivity" },
+    { to: "/dashboard/settings", icon: "⚙", labelKey: "navSettings" },
   ],
-  STAFF: [{ to: "/staff", icon: "📅", labelKey: "navStaffAppointments", end: true }],
+  STAFF: [
+    { to: "/staff", icon: "□", labelKey: "navStaffAppointments", end: true },
+    { to: "/staff/queue", icon: "☷", labelKey: "navQueueManagement", requiresSecretary: true },
+    { to: "/staff/accounts", icon: "₪", labelKey: "navAccounts", requiresSecretary: true },
+  ],
 };
-
 const ROLE_KEY = {
   SUPER_ADMIN: "roleSuperAdmin",
   BUSINESS_OWNER: "roleBusinessOwner",
   STAFF: "roleStaff",
 };
 
-const mojibakePattern = /[״׳גנ]/;
+const mojibakePattern = /[ן¢׳´׳³׳’ֲֲֲ׳ ]/;
 
 function cleanNotificationMessage(item) {
   const message = item?.message || "";
   if (message && !mojibakePattern.test(message)) return message;
-  if (item?.type === "NEW_APPOINTMENT") return "حجز جديد وصل إلى النظام";
+  if (item?.type === "NEW_APPOINTMENT") return "وصل حجز جديد إلى النظام";
   if (item?.type === "CUSTOMER") return "تحديث على حالة الحجز";
   return "إشعار من النظام";
 }
@@ -111,23 +133,41 @@ export function DashboardLayout() {
   const audioContextRef = useRef(null);
   const notificationsMenuRef = useRef(null);
   const location = useLocation();
-  const links = NAV[user?.role] || [];
+  const links = (NAV[user?.role] || []).filter((link) => {
+    if (link.requiresPrintScreen && !user?.business?.printScreenEnabled) return false;
+    if (link.requiresCustomerHub && !user?.business?.customerHubEnabled) return false;
+    if (link.requiresSecretary && user?.staffRole !== "SECRETARY") return false;
+    return true;
+  });
+  const flatLinks = links.flatMap((link) => [link, ...(link.children || [])]);
   const isAdmin = user?.role === "SUPER_ADMIN";
-  const logoSrc = isAdmin ? "/oh-tech-logo.jpg" : user?.business?.logoUrl;
+  const logoSrc = isAdmin ? "/oh-tech-logo.jpg" : user?.business?.logoUrl || "/oh-tech-logo.jpg";
   const roleKey = ROLE_KEY[user?.role] || "roleStaff";
+  const staffJobTitle = user?.employeeProfile?.title?.trim();
+  const roleLabel =
+    user?.role === "STAFF"
+      ? staffJobTitle || (user?.staffRole === "SECRETARY" ? "قسم سكرتارية" : "مقدم خدمة")
+      : t(roleKey);
 
   useEffect(() => {
     if (isAdmin) {
       adminFavicon();
       resetBrandTheme();
     } else {
-      setFavicon(user?.business?.logoUrl || "/favicon.svg");
+      setFavicon(user?.business?.logoUrl || "/oh-tech-logo.jpg");
       applyBrandTheme(user?.business?.brandColor);
     }
+    return () => {
+      resetBrandTheme();
+      adminFavicon();
+    };
   }, [isAdmin, user?.business?.logoUrl, user?.business?.brandColor]);
 
   const currentLabelKey =
-    links.find((link) => (link.end ? location.pathname === link.to : location.pathname.startsWith(link.to)))
+    flatLinks
+      .slice()
+      .sort((a, b) => b.to.length - a.to.length)
+      .find((link) => (link.end ? location.pathname === link.to : location.pathname.startsWith(link.to)))
       ?.labelKey || "navDashboard";
   const unreadNotifications = notifications.filter((item) => !item.isRead);
 
@@ -202,7 +242,7 @@ export function DashboardLayout() {
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <div className="sidebar-brand">
           <div className="brand-logo">
-            {logoSrc ? <img src={logoSrc} alt={isAdmin ? "O&H Tech" : user?.business?.name || t("storeLogo")} /> : <span>🏢</span>}
+            {logoSrc ? <img src={logoSrc} alt={isAdmin ? "O&H Tech" : user?.business?.name || t("storeLogo")} /> : <span>OH</span>}
           </div>
           <div>
             <div className="brand-name">{isAdmin ? "O&H Tech" : user?.business?.name || t("businessPlatform")}</div>
@@ -210,25 +250,45 @@ export function DashboardLayout() {
           </div>
         </div>
 
-        <nav className="nav" onClick={() => setOpen(false)}>
+        <nav className="nav">
           <div className="nav-section">{t("mainMenu")}</div>
-          {links.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.end}
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              <span className="nav-ico">{link.icon}</span>
-              {t(link.labelKey)}
-            </NavLink>
-          ))}
+          {links.map((link) => {
+            const submenuOpen = link.children?.length && location.pathname.startsWith(link.to);
+            return (
+              <div key={link.to} className={submenuOpen ? "nav-group open" : "nav-group"}>
+                <NavLink
+                  to={link.to}
+                  end={link.end}
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                  onClick={() => setOpen(false)}
+                >
+                  <span className="nav-ico">{link.icon}</span>
+                  {t(link.labelKey)}
+                </NavLink>
+                {submenuOpen && (
+                  <div className="nav-submenu">
+                    {link.children.map((child) => (
+                      <NavLink
+                        key={child.to}
+                        to={child.to}
+                        end={child.end}
+                        className={({ isActive }) => `nav-sub-link ${isActive ? "active" : ""}`}
+                        onClick={() => setOpen(false)}
+                      >
+                        {t(child.labelKey)}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         <div className="sidebar-foot">
           {user?.business && (
             <div className="user-chip" style={{ marginBottom: 6 }}>
-              <span style={{ fontSize: 18 }}>🏢</span>
+              <span style={{ fontSize: 18 }}>▣</span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {user.business.name}
@@ -241,18 +301,16 @@ export function DashboardLayout() {
               <div style={{ fontWeight: 700, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {user?.name}
               </div>
-              <div className="soft" style={{ fontSize: 12 }}>{t(roleKey)}</div>
+              <div className="soft" style={{ fontSize: 12 }}>{roleLabel}</div>
             </div>
-            <button className="icon-btn" title={t("logout")} onClick={logout}>
-              ⏏
-            </button>
+            <button className="icon-btn" title={t("logout")} onClick={logout}>↩</button>
           </div>
         </div>
       </aside>
 
       <div className="main">
         <header className="topbar">
-          <div className="row">
+          <div className="row topbar-main">
             <button
               className="burger"
               onClick={() => {
@@ -261,12 +319,10 @@ export function DashboardLayout() {
               }}
               aria-label={sidebarClosed ? t("openSidebar") : t("closeSidebar")}
               title={sidebarClosed ? t("openSidebar") : t("closeSidebar")}
-            >
-              ☰
-            </button>
+            >☰</button>
             <div className="topbar-title">{t(currentLabelKey)}</div>
           </div>
-          <div className="row">
+          <div className="row topbar-actions">
             <LanguageSwitcher className="topbar-language-switcher" />
             {user?.role === "BUSINESS_OWNER" && (
               <div className="notifications-menu" ref={notificationsMenuRef}>
@@ -302,7 +358,7 @@ export function DashboardLayout() {
               </div>
             )}
             <span className="badge badge-primary hide-mobile">
-              <span className="dot" /> {t(roleKey)}
+              <span className="dot" /> {roleLabel}
             </span>
           </div>
         </header>

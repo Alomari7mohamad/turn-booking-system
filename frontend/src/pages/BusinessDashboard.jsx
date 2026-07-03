@@ -31,6 +31,7 @@ export default function BusinessDashboard() {
   const s = data.stats || {};
   const currentBusiness = business || user?.business;
   const bookingUrl = currentBusiness ? `${location.origin}/book/${currentBusiness.slug}` : "";
+  const printUrl = currentBusiness?.slug && currentBusiness?.printScreenEnabled !== false ? `${location.origin}/print/${currentBusiness.slug}` : "";
   const statusLabel = (status) => ({
     PENDING: t("statusPending"),
     CONFIRMED: t("statusConfirmed"),
@@ -52,7 +53,7 @@ export default function BusinessDashboard() {
 
       {bookingUrl && (
         <div className="card card-pad" style={{ marginBottom: 18, background: "var(--primary-soft)", borderColor: "var(--primary-soft-2)" }}>
-          <div className="row-between wrap">
+          <div className="row-between wrap" style={{ gap: 14 }}>
             <div>
               <div style={{ fontWeight: 700 }}>{t("publicBookingLink")}</div>
               <div className="muted" style={{ fontSize: 13.5 }}>{t("shareBookingLink")}</div>
@@ -63,6 +64,19 @@ export default function BusinessDashboard() {
               <a className="btn btn-ghost btn-sm" href={bookingUrl} target="_blank" rel="noreferrer">{t("open")}</a>
             </div>
           </div>
+          {printUrl && (
+            <div className="row-between wrap" style={{ gap: 14, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--primary-soft-2)" }}>
+              <div>
+                <div style={{ fontWeight: 700 }}>رابط شاشة الطباعة</div>
+                <div className="muted" style={{ fontSize: 13.5 }}>افتحه داخل المحل ليستخرج الزبون ورقة الدور برقم هاتفه</div>
+              </div>
+              <div className="row">
+                <code style={{ background: "#fff", padding: "8px 12px", borderRadius: 8, fontSize: 13 }}>/print/{currentBusiness.slug}</code>
+                <button className="btn btn-primary btn-sm" onClick={() => { navigator.clipboard?.writeText(printUrl); }}>{t("copy")}</button>
+                <a className="btn btn-ghost btn-sm" href={printUrl} target="_blank" rel="noreferrer">{t("open")}</a>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

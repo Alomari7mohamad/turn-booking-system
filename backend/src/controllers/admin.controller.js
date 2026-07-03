@@ -3,6 +3,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { hashPassword } from "../utils/password.js";
 import { logAudit, AUDIT } from "../services/audit.service.js";
+import { recordCustomerPayment } from "../services/customer.service.js";
 
 function slugify(str) {
   return String(str)
@@ -77,6 +78,66 @@ export const getStats = asyncHandler(async (_req, res) => {
 });
 
 // GET /api/admin/managers — إدارة المدراء
+function parseRangeDate(value, fallback) {
+  if (!value) return fallback;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? fallback : date;
+}
+
+// GET /api/admin/analytics
+export const getAnalytics = asyncHandler(async (req, res) => {
+  const now = new Date();
+  const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+  const from = parseRangeDate(req.query.from, defaultFrom);
+  const to = parseRangeDate(req.query.to, now);
+  to.setHours(23, 59, 59, 999);
+
+  const [businesses, users, appointments, subscriptions] = await Promise.all([
+    prisma.business.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        _count: { select: { appointments: true, services: true, employees: true } },
+      },
+    }),
+    prisma.user.findMany({
+      where: { role: { in: ["BUSINESS_OWNER", "STAFF"] } },
+      select: { id: true, role: true, businessId: true, createdAt: true },
+    }),
+    prisma.appointment.findMany({
+      where: { startAt: { gte: from, lte: to } },
+      orderBy: { startAt: "desc" },
+      include: {
+        business: { select: { id: true, name: true } },
+        service: { select: { id: true, name: true, price: true } },
+        employee: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.subscription.findMany({
+      where: { createdAt: { lte: to } },
+      orderBy: { createdAt: "desc" },
+      include: { business: { select: { id: true, name: true } } },
+    }),
+  ]);
+
+  res.json({
+    success: true,
+    range: { from, to },
+    businesses: businesses.map((business) => ({
+      id: business.id,
+      name: business.name,
+      slug: business.slug,
+      isActive: business.isActive,
+      createdAt: business.createdAt,
+      appointmentsCount: business._count.appointments,
+      servicesCount: business._count.services,
+      employeesCount: business._count.employees,
+    })),
+    users,
+    subscriptions,
+    appointments,
+  });
+});
+
 export const listManagers = asyncHandler(async (_req, res) => {
   const managers = await prisma.user.findMany({
     where: { role: "SUPER_ADMIN" },
@@ -162,9 +223,16 @@ export const listBusinesses = asyncHandler(async (req, res) => {
       email: b.email,
       phone: b.phone,
       address: b.address,
+      mapUrl: b.mapUrl,
+      timezone: b.timezone,
       logoUrl: b.logoUrl,
+      bookingHeroImageUrl: b.bookingHeroImageUrl,
       brandColor: b.brandColor,
       requiresAppointmentApproval: b.requiresAppointmentApproval,
+      printScreenEnabled: b.printScreenEnabled,
+      reviewsEnabled: b.reviewsEnabled,
+      onlinePaymentEnabled: b.onlinePaymentEnabled,
+      payAtStoreEnabled: b.payAtStoreEnabled,
       isActive: b.isActive,
       createdAt: b.createdAt,
       counts: b._count,
@@ -197,13 +265,17 @@ export const createBusiness = asyncHandler(async (req, res) => {
     email,
     phone,
     address,
+    mapUrl,
     logoUrl,
+    bookingHeroImageUrl,
     brandColor,
     timezone,
     ownerName,
     ownerEmail,
     ownerPassword,
     requiresAppointmentApproval = true,
+    printScreenEnabled = false,
+    reviewsEnabled = false,
     plan = "MONTHLY",
     startsAt,
     endsAt,
@@ -237,10 +309,15 @@ export const createBusiness = asyncHandler(async (req, res) => {
         email: email || null,
         phone: phone || null,
         address: address || null,
+        mapUrl: mapUrl || null,
         logoUrl: logoUrl || null,
+        bookingHeroImageUrl: bookingHeroImageUrl || null,
         brandColor: brandColor || "#064e3b",
         timezone: timezone || "Asia/Riyadh",
         requiresAppointmentApproval: Boolean(requiresAppointmentApproval),
+        printScreenEnabled: Boolean(printScreenEnabled),
+        customerHubEnabled: true,
+        reviewsEnabled: Boolean(reviewsEnabled),
       },
     });
 
@@ -283,28 +360,74 @@ export const createBusiness = asyncHandler(async (req, res) => {
 // PATCH /api/admin/businesses/:id — تعديل بيانات المحل
 export const updateBusiness = asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const { name, slug, email, phone, address, timezone, logoUrl, brandColor, requiresAppointmentApproval, ownerName, ownerEmail, ownerPassword } = req.body;
+  const {
+    name,
+    slug,
+    email,
+    phone,
+    address,
+    mapUrl,
+    timezone,
+    logoUrl,
+    bookingHeroImageUrl,
+    brandColor,
+    isActive,
+    requiresAppointmentApproval,
+    printScreenEnabled,
+    reviewsEnabled,
+    onlinePaymentEnabled,
+    payAtStoreEnabled,
+    ownerName,
+    ownerEmail,
+    ownerPassword,
+    subscriptionPlan,
+    subscriptionPrice,
+    subscriptionStartsAt,
+    subscriptionEndsAt,
+    subscriptionFreeMonths,
+  } = req.body;
 
   const data = {};
   if (name !== undefined) data.name = name;
-  if (slug !== undefined) data.slug = slugify(slug);
+  if (slug !== undefined) {
+    const finalSlug = slugify(slug);
+    if (!finalSlug) throw ApiError.badRequest("رابط المحل مطلوب");
+    const taken = await prisma.business.findFirst({ where: { slug: finalSlug, id: { not: id } } });
+    if (taken) throw ApiError.conflict("رابط المحل مستخدم مسبقًا");
+    data.slug = finalSlug;
+  }
   if (email !== undefined) data.email = email;
   if (phone !== undefined) data.phone = phone;
   if (address !== undefined) data.address = address;
+  if (mapUrl !== undefined) data.mapUrl = mapUrl || null;
   if (timezone !== undefined) data.timezone = timezone;
   if (logoUrl !== undefined) data.logoUrl = logoUrl || null;
+  if (bookingHeroImageUrl !== undefined) data.bookingHeroImageUrl = bookingHeroImageUrl || null;
   if (brandColor !== undefined) data.brandColor = brandColor || "#064e3b";
+  if (isActive !== undefined) data.isActive = Boolean(isActive);
   if (requiresAppointmentApproval !== undefined) data.requiresAppointmentApproval = Boolean(requiresAppointmentApproval);
+  if (printScreenEnabled !== undefined) data.printScreenEnabled = Boolean(printScreenEnabled);
+  if (reviewsEnabled !== undefined) data.reviewsEnabled = Boolean(reviewsEnabled);
+  if (onlinePaymentEnabled !== undefined) data.onlinePaymentEnabled = Boolean(onlinePaymentEnabled);
+  if (payAtStoreEnabled !== undefined) data.payAtStoreEnabled = Boolean(payAtStoreEnabled);
+
+  const shouldUpdateSubscription =
+    subscriptionPlan !== undefined ||
+    subscriptionPrice !== undefined ||
+    subscriptionStartsAt !== undefined ||
+    subscriptionEndsAt !== undefined ||
+    subscriptionFreeMonths !== undefined;
 
   const business = await prisma.$transaction(async (tx) => {
     const updated = await tx.business.update({ where: { id }, data });
     const owner = await tx.user.findFirst({ where: { businessId: id, role: "BUSINESS_OWNER" } });
-    if (owner && (ownerName !== undefined || ownerEmail !== undefined || ownerPassword !== undefined)) {
+    if (ownerName !== undefined || ownerEmail !== undefined || ownerPassword !== undefined) {
       const ownerData = {};
       if (ownerName !== undefined) ownerData.name = ownerName;
       if (ownerEmail !== undefined) {
         const email = String(ownerEmail).toLowerCase().trim();
-        const taken = await tx.user.findFirst({ where: { email, id: { not: owner.id } } });
+        if (!email) throw ApiError.badRequest("البريد الإلكتروني لصاحب المحل مطلوب");
+        const taken = await tx.user.findFirst({ where: { email, ...(owner ? { id: { not: owner.id } } : {}) } });
         if (taken) throw ApiError.conflict("البريد الإلكتروني مستخدم مسبقًا");
         ownerData.email = email;
       }
@@ -312,7 +435,49 @@ export const updateBusiness = asyncHandler(async (req, res) => {
         ownerData.loginPassword = ownerPassword || null;
         if (ownerPassword) ownerData.passwordHash = await hashPassword(ownerPassword);
       }
-      if (Object.keys(ownerData).length) await tx.user.update({ where: { id: owner.id }, data: ownerData });
+      if (Object.keys(ownerData).length) {
+        if (owner) {
+          await tx.user.update({ where: { id: owner.id }, data: ownerData });
+        } else {
+          if (!ownerData.name || !ownerData.email || !ownerPassword) {
+            throw ApiError.badRequest("اسم وبريد وكلمة مرور صاحب المحل مطلوبة");
+          }
+          await tx.user.create({
+            data: {
+              ...ownerData,
+              businessId: id,
+              role: "BUSINESS_OWNER",
+            },
+          });
+        }
+      }
+    }
+    if (shouldUpdateSubscription) {
+      const latest = await tx.subscription.findFirst({
+        where: { businessId: id },
+        orderBy: { createdAt: "desc" },
+      });
+      const plan = subscriptionPlan || latest?.plan || "MONTHLY";
+      if (!["MONTHLY", "YEARLY"].includes(plan)) {
+        throw ApiError.badRequest("نوع الاشتراك يجب أن يكون MONTHLY أو YEARLY");
+      }
+      const dates = buildSubscriptionDates({
+        plan,
+        startsAt: subscriptionStartsAt || latest?.startsAt?.toISOString().slice(0, 10),
+        endsAt: subscriptionEndsAt || latest?.endsAt?.toISOString().slice(0, 10),
+        freeMonths: subscriptionFreeMonths || 0,
+      });
+      const subscriptionData = {
+        plan,
+        price: Number(subscriptionPrice ?? latest?.price ?? 0),
+        ...dates,
+        status: "ACTIVE",
+      };
+      if (latest) {
+        await tx.subscription.update({ where: { id: latest.id }, data: subscriptionData });
+      } else {
+        await tx.subscription.create({ data: { businessId: id, ...subscriptionData } });
+      }
     }
     return updated;
   });
@@ -360,11 +525,15 @@ export const overrideAppointmentPayment = asyncHandler(async (req, res) => {
     throw ApiError.badRequest("Paid appointments cannot have their payment status changed");
   }
 
+  const serviceForPayment = paymentStatus === "PAID" && existing.paymentAmount == null
+    ? await prisma.service.findUnique({ where: { id: existing.serviceId }, select: { price: true } })
+    : null;
   const appointment = await prisma.appointment.update({
     where: { id },
     data: {
       paymentStatus,
       paidAt: paymentStatus === "PAID" ? new Date() : null,
+      ...(serviceForPayment ? { paymentAmount: serviceForPayment.price } : {}),
       // عند تأكيد الدفع نؤكّد الموعد؛ عند فشله نلغيه (يتحرّر الوقت)
       ...(paymentStatus === "PAID" ? { status: "CONFIRMED" } : {}),
       ...(paymentStatus === "FAILED" ? { status: "CANCELLED" } : {}),
@@ -379,6 +548,9 @@ export const overrideAppointmentPayment = asyncHandler(async (req, res) => {
     entityId: id,
     meta: { paymentStatus, by: "super_admin" },
   });
+  if (appointment.paymentStatus === "PAID") {
+    await recordCustomerPayment(prisma, appointment);
+  }
   res.json({ success: true, appointment });
 });
 

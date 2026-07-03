@@ -8,22 +8,33 @@ import { DashboardLayout } from "./layouts/DashboardLayout.jsx";
 
 import Login from "./pages/Login.jsx";
 import PublicBooking from "./pages/PublicBooking.jsx";
+import PublicReview from "./pages/PublicReview.jsx";
+import PrintTicketPage from "./pages/PrintTicketPage.jsx";
 import PayGateway from "./pages/PayGateway.jsx";
 import PaymentResult from "./pages/PaymentResult.jsx";
 import AppointmentDelayResponse from "./pages/AppointmentDelayResponse.jsx";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard.jsx";
+import SuperAdminStatisticsPage from "./pages/SuperAdminStatisticsPage.jsx";
 import BusinessesManagement from "./pages/BusinessesManagement.jsx";
 import ManagersManagement from "./pages/ManagersManagement.jsx";
 import AdminBusinessControl from "./pages/AdminBusinessControl.jsx";
 import BusinessDashboard from "./pages/BusinessDashboard.jsx";
+import BusinessStatisticsPage from "./pages/BusinessStatisticsPage.jsx";
+import CustomersPage from "./pages/CustomersPage.jsx";
 import AppointmentsPage from "./pages/AppointmentsPage.jsx";
+import AppointmentPaymentsPage from "./pages/AppointmentPaymentsPage.jsx";
+import BookingManagementPage from "./pages/BookingManagementPage.jsx";
 import ServicesManagement from "./pages/ServicesManagement.jsx";
 import EmployeesManagement from "./pages/EmployeesManagement.jsx";
 import WorkingHoursSettings from "./pages/WorkingHoursSettings.jsx";
 import SubscriptionPage from "./pages/SubscriptionPage.jsx";
 import BusinessSettings from "./pages/BusinessSettings.jsx";
 import AuditLogPage from "./pages/AuditLogPage.jsx";
+import SecretaryPage from "./pages/SecretaryPage.jsx";
+import AccountsPage from "./pages/AccountsPage.jsx";
 import StaffDashboard from "./pages/StaffDashboard.jsx";
+import StaffAccountsPage from "./pages/StaffAccountsPage.jsx";
+import StaffQueueManagementPage from "./pages/StaffQueueManagementPage.jsx";
 import PolicyPage from "./pages/PolicyPage.jsx";
 
 // يوجّه المستخدم للوحة المناسبة لدوره بعد الدخول.
@@ -46,6 +57,8 @@ export default function App() {
         <Route path="/privacy" element={<PolicyPage type="privacy" />} />
         <Route path="/terms" element={<PolicyPage type="terms" />} />
         <Route path="/book/:slug" element={<PublicBooking />} />
+        <Route path="/review/:token" element={<PublicReview />} />
+        <Route path="/print/:slug" element={<PrintTicketPage />} />
         <Route path="/pay/success" element={<PaymentResult status="success" />} />
         <Route path="/pay/failed" element={<PaymentResult status="failed" />} />
         <Route path="/pay/:reference" element={<PayGateway />} />
@@ -61,16 +74,24 @@ export default function App() {
           }
         >
           <Route path="/admin" element={<SuperAdminDashboard />} />
+          <Route path="/admin/statistics" element={<SuperAdminStatisticsPage />} />
           <Route path="/admin/businesses" element={<BusinessesManagement />} />
           <Route path="/admin/managers" element={<ManagersManagement />} />
           <Route path="/admin/businesses/:businessId/control" element={<AdminBusinessControl />}>
             <Route index element={<BusinessDashboard />} />
+            <Route path="statistics" element={<BusinessStatisticsPage />} />
+            <Route path="customers" element={<CustomersPage />} />
             <Route path="appointments" element={<AppointmentsPage />} />
+            <Route path="appointments/payments" element={<AppointmentPaymentsPage />} />
+            <Route path="appointments/manage" element={<BookingManagementPage />} />
             <Route path="appointments/rejected" element={<AppointmentsPage mode="rejected" />} />
             <Route path="services" element={<ServicesManagement />} />
             <Route path="employees" element={<EmployeesManagement />} />
             <Route path="working-hours" element={<WorkingHoursSettings />} />
             <Route path="settings" element={<BusinessSettings />} />
+            <Route path="secretary" element={<SecretaryPage />} />
+            <Route path="accounts" element={<AccountsPage />} />
+            <Route path="accounts/payments" element={<AppointmentPaymentsPage />} />
             <Route path="subscription" element={<SubscriptionPage />} />
             <Route path="activity" element={<AuditLogPage />} />
           </Route>
@@ -85,7 +106,11 @@ export default function App() {
           }
         >
           <Route path="/dashboard" element={<BusinessDashboard />} />
+          <Route path="/dashboard/statistics" element={<BusinessStatisticsPage />} />
+          <Route path="/dashboard/customers" element={<CustomersPage />} />
           <Route path="/dashboard/appointments" element={<AppointmentsPage />} />
+          <Route path="/dashboard/appointments/payments" element={<Navigate to="/dashboard/accounts/payments" replace />} />
+          <Route path="/dashboard/appointments/manage" element={<BookingManagementPage />} />
           <Route path="/dashboard/appointments/rejected" element={<AppointmentsPage mode="rejected" />} />
           <Route path="/dashboard/services" element={<ServicesManagement />} />
           <Route path="/dashboard/employees" element={<EmployeesManagement />} />
@@ -93,6 +118,8 @@ export default function App() {
           <Route path="/dashboard/subscription" element={<SubscriptionPage />} />
           <Route path="/dashboard/activity" element={<AuditLogPage />} />
           <Route path="/dashboard/settings" element={<BusinessSettings />} />
+          <Route path="/dashboard/accounts" element={<AccountsPage />} />
+          <Route path="/dashboard/accounts/payments" element={<AppointmentPaymentsPage />} />
         </Route>
 
         {/* Staff */}
@@ -104,6 +131,8 @@ export default function App() {
           }
         >
           <Route path="/staff" element={<StaffDashboard />} />
+          <Route path="/staff/queue" element={<StaffQueueManagementPage />} />
+          <Route path="/staff/accounts" element={<StaffAccountsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

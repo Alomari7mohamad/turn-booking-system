@@ -6,6 +6,7 @@ import { useToast } from "../components/Toast.jsx";
 import { LanguageSwitcher } from "../components/GlobalControls.jsx";
 import { Button, Field, Input } from "../components/ui.jsx";
 import { adminFavicon } from "../favicon.js";
+import { resetBrandTheme } from "../brandTheme.js";
 
 const demoAccounts = [
   { roleKey: "adminRole", email: "admin@booking.com", pass: "admin123" },
@@ -24,6 +25,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    resetBrandTheme();
     adminFavicon();
   }, []);
 

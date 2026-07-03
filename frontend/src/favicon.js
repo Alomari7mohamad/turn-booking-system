@@ -1,4 +1,4 @@
-const DEFAULT_FAVICON = "/favicon.svg";
+const DEFAULT_FAVICON = "/oh-tech-logo.jpg";
 const ADMIN_FAVICON = "/oh-tech-logo2-transparent.png?v=3";
 
 export function setFavicon(href = DEFAULT_FAVICON) {

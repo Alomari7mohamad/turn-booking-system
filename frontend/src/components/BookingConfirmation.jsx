@@ -1,7 +1,5 @@
 import { Badge, fmtDate, fmtTime, fmtPrice, PAYMENT_STATUS_META, PAYMENT_METHOD_META } from "./ui.jsx";
 
-// بطاقة تأكيد الحجز — تُستخدم في صفحة الحجز (دفع في المحل) وصفحة نجاح الدفع (إلكتروني).
-// تعرض: رقم الحجز، المحل، الخدمة، الموظف، التاريخ والوقت، طريقة الدفع، حالة الدفع.
 export function BookingConfirmation({ data }) {
   const pm = PAYMENT_METHOD_META[data.paymentMethod];
   const ps = PAYMENT_STATUS_META[data.paymentStatus];
@@ -14,16 +12,18 @@ export function BookingConfirmation({ data }) {
         <span style={{ fontWeight: 800, fontFamily: "monospace", fontSize: 16 }}>#{data.bookingNumber}</span>
       </div>
       <div className="card-pad col" style={{ gap: 0 }}>
+        {data.customerName && <Row label="طالب الخدمة" value={data.customerName} />}
+        {data.customerPhone && <Row label="رقم الهاتف" value={data.customerPhone} />}
         <Row label="المحل" value={data.business} />
         <Row label="الخدمة" value={data.service} />
         <Row label="الموظف" value={data.employee} />
         <Row label="التاريخ" value={fmtDate(data.startAt)} />
         <Row label="الوقت" value={data.endAt ? `${fmtTime(data.startAt)} - ${fmtTime(data.endAt)}` : fmtTime(data.startAt)} />
-        {data.amount != null && <Row label="المبلغ" value={fmtPrice(data.amount)} />}
-        <Row label="طريقة الدفع" value={pm ? `${pm.icon} ${pm.label}` : "—"} />
+        {data.amount != null && <Row label="المبلغ" value={Number(data.amount) === 0 ? "الخدمة مجانية" : fmtPrice(data.amount)} />}
+        <Row label="طريقة الدفع" value={pm ? pm.label : "-"} />
         <Row
           label="حالة الدفع"
-          value={isFree ? <Badge tone="success">الخدمة مجانية</Badge> : ps ? <Badge tone={ps.tone}>{ps.label}</Badge> : "—"}
+          value={isFree ? <Badge tone="success">الخدمة مجانية</Badge> : ps ? <Badge tone={ps.tone}>{ps.label}</Badge> : "-"}
           last
         />
       </div>

@@ -1,121 +1,280 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { publicApi } from "../api/endpoints.js";
 import { setFavicon } from "../favicon.js";
-import { useLanguage } from "../context/LanguageContext.jsx";
-import { Button, Field, Input, Spinner, EmptyState, fmtPrice, fmtDate } from "../components/ui.jsx";
-import { BookingConfirmation } from "../components/BookingConfirmation.jsx";
 import { LanguageSwitcher } from "../components/GlobalControls.jsx";
+import { Button, EmptyState, Field, Input, Select, Spinner, fmtDate, fmtPrice, fmtTime } from "../components/ui.jsx";
+import { applyBrandTheme, buildBrandThemeVars, resetBrandTheme } from "../brandTheme.js";
 
-const dayKeys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const dayKeys = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const monthNames = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+
+function dateInputFrom(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function todayInput() {
+  return dateInputFrom(new Date());
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function buildWazeUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (/waze\.com|ul\.waze\.com/i.test(raw)) return raw;
+  return `https://waze.com/ul?q=${encodeURIComponent(raw)}&navigate=yes`;
+}
+
+function calendarDays(monthDate) {
+  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+  return Array.from({ length: 42 }).map((_, index) => addDays(start, index));
+}
+
+function isPastDate(dateStr) {
+  return dateStr < todayInput();
+}
+
+function serviceIcon(name = "") {
+  if (/شعر|قص/i.test(name)) return "قص";
+  if (/حلاق|حلاقة/i.test(name)) return "حلق";
+  if (/تنظيف|بشرة/i.test(name)) return "بشرة";
+  if (/صبغ|صبغة/i.test(name)) return "صبغ";
+  return "+";
+}
+
+function normalizeLocalPhoneInput(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 10);
+}
+
+function validLocalPhone(value) {
+  return /^05\d{8}$/.test(String(value || ""));
+}
 
 export default function PublicBooking() {
   const { slug } = useParams();
-  const { t } = useLanguage();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [step, setStep] = useState(0);
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [loginMessage, setLoginMessage] = useState("");
+  const [devCode, setDevCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [session, setSession] = useState(null);
+  const [appointments, setAppointments] = useState([]);
+  const [activeTab, setActiveTab] = useState("home");
+  const [step, setStep] = useState("service");
   const [service, setService] = useState(null);
   const [employee, setEmployee] = useState(null);
-  const [date, setDate] = useState(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [selectedDate, setSelectedDate] = useState(todayInput());
+  const [monthDate, setMonthDate] = useState(() => new Date());
+  const [monthStatus, setMonthStatus] = useState({});
   const [slots, setSlots] = useState(null);
-  const [closedNotice, setClosedNotice] = useState(null);
   const [slot, setSlot] = useState(null);
-  const [customer, setCustomer] = useState({ customerName: "", customerPhone: "", customerEmail: "" });
   const [paymentMethod, setPaymentMethod] = useState(null);
+  const [customerForm, setCustomerForm] = useState({ name: "", email: "" });
   const [booking, setBooking] = useState(false);
-  const [bookErr, setBookErr] = useState(null);
-  const [done, setDone] = useState(null);
-
-  const steps = [t("bookingStepService"), t("bookingStepEmployee"), t("bookingStepDateTime"), t("bookingStepDetails")];
-
-  const openDayText = (dateStr) => {
-    if (!dateStr) return "";
-    const d = new Date(`${dateStr}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return "";
-    return `${t(dayKeys[d.getDay()])} ${fmtDate(d)}`;
-  };
+  const [bookErr, setBookErr] = useState("");
+  const [success, setSuccess] = useState(null);
+  const [cancelingId, setCancelingId] = useState(null);
 
   useEffect(() => {
-    publicApi.business(slug).then(setData).catch((e) => setError(e.message));
+    publicApi.business(slug).then(setData).catch((err) => setError(err.message));
   }, [slug]);
 
   useEffect(() => {
-    if (data?.business) setFavicon(data.business.logoUrl || "/favicon.svg");
+    if (data?.business) setFavicon(data.business.logoUrl || "/oh-tech-logo.jpg");
   }, [data]);
 
   useEffect(() => {
-    if (!data) return;
-    const methods = [];
-    if (data.business.onlinePaymentEnabled) methods.push("ONLINE");
-    if (data.business.payAtStoreEnabled) methods.push("PAY_AT_STORE");
-    if (methods.length === 1) setPaymentMethod(methods[0]);
-  }, [data]);
+    if (!data?.business) return undefined;
+    applyBrandTheme(data.business.brandColor);
+    return () => resetBrandTheme();
+  }, [data?.business?.brandColor]);
+
+  const business = data?.business;
+  const services = data?.services || [];
+  const employees = data?.employees || [];
+  const brandStyle = buildBrandThemeVars(business?.brandColor);
+  const hasLoginImage = Boolean(business?.bookingHeroImageUrl);
+  const loginCardStyle = hasLoginImage ? { "--booking-card-bg": `url("${business.bookingHeroImageUrl}")` } : undefined;
+  const wazeUrl = buildWazeUrl(business?.mapUrl || business?.address);
+  const serviceEmployees = service ? employees.filter((item) => item.serviceIds.includes(service.id)) : [];
+  const methods = useMemo(() => {
+    const result = [];
+    if (business?.onlinePaymentEnabled) result.push("ONLINE");
+    if (business?.payAtStoreEnabled) result.push("PAY_AT_STORE");
+    return result;
+  }, [business]);
+  const filteredServices = services.filter((item) => item.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()));
+
+  const refreshAppointments = async (targetPhone = session?.phone) => {
+    if (!targetPhone) return;
+    const res = await publicApi.findAppointmentByPhone(slug, targetPhone);
+    setAppointments(res.appointments || []);
+    if (res.customer?.name) {
+      setSession((current) => current ? { ...current, name: res.customer.name } : current);
+      setCustomerForm((current) => ({ ...current, name: res.customer.name }));
+    }
+  };
+
+  const sendCode = async () => {
+    if (!validLocalPhone(phone)) {
+      setLoginMessage("الرقم خاطئ");
+      setCodeSent(false);
+      setCode("");
+      return;
+    }
+    setSendingCode(true);
+    setLoginMessage("");
+    setDevCode("");
+    setCodeSent(false);
+    setCode("");
+    try {
+      const res = await publicApi.sendPhoneVerification(slug, phone);
+      setLoginMessage(res.message || "تم إرسال رمز التحقق عبر واتساب");
+      setDevCode(res.devCode || "");
+      setCodeSent(true);
+    } catch (err) {
+      setLoginMessage(err.message);
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const verifyCode = async () => {
+    if (!validLocalPhone(phone)) {
+      setLoginMessage("الرقم خاطئ");
+      setCodeSent(false);
+      return;
+    }
+    setVerifyingCode(true);
+    setLoginMessage("");
+    try {
+      const res = await publicApi.confirmPhoneVerification(slug, { phone, code });
+      const nextSession = { phone, token: res.token, name: "", email: "" };
+      setSession(nextSession);
+      setCustomerForm({ name: "", email: "" });
+      await refreshAppointments(phone);
+    } catch (err) {
+      setLoginMessage(err.message);
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
 
   useEffect(() => {
-    if (step !== 2 || !service) return;
+    if (activeTab !== "new" || step !== "time" || !service) return;
+    let cancelled = false;
     setSlots(null);
     setSlot(null);
-    setClosedNotice(null);
-    publicApi
-      .availability(slug, { serviceId: service.id, employeeId: employee?.id || undefined, date })
-      .then((r) => {
-        setSlots(r.slots || []);
-        setClosedNotice(r.closed || null);
+    publicApi.availability(slug, { serviceId: service.id, employeeId: employee?.id || undefined, date: selectedDate })
+      .then((res) => {
+        if (!cancelled) setSlots(res.slots || []);
       })
       .catch(() => {
-        setSlots([]);
-        setClosedNotice(null);
+        if (!cancelled) setSlots([]);
       });
-  }, [step, service, employee, date, slug]);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, step, service, employee, selectedDate, slug]);
 
   useEffect(() => {
-    if (!done?.id || done.status !== "PENDING") return;
-    const timer = setInterval(() => {
-      publicApi.appointmentStatus(done.id)
-        .then((r) => setDone((current) => current?.id === done.id ? { ...current, ...r.appointment } : current))
-        .catch(() => {});
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [done?.id, done?.status]);
+    if (activeTab !== "new" || step !== "time" || !service) return;
+    let cancelled = false;
+    const days = calendarDays(monthDate);
+    Promise.all(days.map(async (date) => {
+      const dateStr = dateInputFrom(date);
+      if (isPastDate(dateStr)) return [dateStr, "past"];
+      try {
+        const res = await publicApi.availability(slug, { serviceId: service.id, employeeId: employee?.id || undefined, date: dateStr });
+        if (res.closed) return [dateStr, "closed"];
+        return [dateStr, (res.slots || []).length ? "available" : "unavailable"];
+      } catch {
+        return [dateStr, "closed"];
+      }
+    })).then((entries) => {
+      if (!cancelled) setMonthStatus(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, step, service, employee, monthDate, slug]);
 
-  if (error) {
-    return (
-      <CenterCard>
-        <EmptyState title={t("bookingPageUnavailable")} hint={error} />
-      </CenterCard>
-    );
-  }
+  if (error) return <CenterCard><EmptyState title="تعذر فتح صفحة الحجز" hint={error} /></CenterCard>;
   if (!data) return <Spinner page />;
 
-  const { business, services, employees } = data;
-  const brandStyle = {
-    "--primary": business.brandColor || "#064e3b",
-    "--primary-hover": business.brandColor || "#022c22",
-    "--gradient": `linear-gradient(135deg, ${business.brandColor || "#064e3b"} 0%, #022c22 100%)`,
+  const resetNewBooking = () => {
+    setActiveTab("new");
+    setStep("service");
+    setService(null);
+    setEmployee(null);
+    setSlot(null);
+    setSuccess(null);
+    setBookErr("");
+    setSelectedDate(todayInput());
+    setMonthDate(new Date());
+    setPaymentMethod(methods.length === 1 ? methods[0] : null);
   };
-  const eligibleEmployees = service ? employees.filter((item) => item.serviceIds.includes(service.id)) : [];
-  const isServiceFree = Number(service?.price ?? 0) === 0;
-  const methods = [];
-  if (business.onlinePaymentEnabled) methods.push("ONLINE");
-  if (business.payAtStoreEnabled) methods.push("PAY_AT_STORE");
 
-  const confirm = async () => {
+  const chooseService = (item) => {
+    setService(item);
+    setEmployee(null);
+    setStep("employee");
+  };
+
+  const chooseEmployee = (item) => {
+    setEmployee(item);
+    setStep("time");
+  };
+
+  const confirmBooking = async () => {
+    const name = (customerForm.name || session?.name || "").trim();
+    if (!name) {
+      setBookErr("يرجى إدخال الاسم");
+      return;
+    }
+    const isFree = Number(service.price || 0) === 0;
+    if (!isFree && !paymentMethod) {
+      setBookErr("يرجى اختيار طريقة الدفع");
+      return;
+    }
     setBooking(true);
-    setBookErr(null);
+    setBookErr("");
     try {
       const res = await publicApi.book(slug, {
         serviceId: service.id,
         employeeId: employee?.id || undefined,
         startAt: slot.startAt,
-        paymentMethod: isServiceFree ? "PAY_AT_STORE" : paymentMethod,
-        ...customer,
+        customerName: name,
+        customerPhone: session.phone,
+        customerEmail: customerForm.email || session.email || "",
+        paymentMethod: isFree ? "PAY_AT_STORE" : paymentMethod,
+        phoneVerificationToken: session.token,
       });
       if (res.requiresPayment && res.paymentUrl) {
         window.location.href = res.paymentUrl;
         return;
       }
-      setDone({ ...res.appointment, business: data.business.name });
+      const appointment = { ...res.appointment, business: business.name };
+      setSuccess(appointment);
+      setSession((current) => ({ ...current, name, email: customerForm.email || "" }));
+      setActiveTab("new");
+      setStep("success");
+      await refreshAppointments(session.phone);
     } catch (err) {
       setBookErr(err.message);
     } finally {
@@ -123,240 +282,318 @@ export default function PublicBooking() {
     }
   };
 
-  const resetBooking = () => {
-    setDone(null);
-    setStep(0);
-    setService(null);
-    setEmployee(null);
-    setSlot(null);
-    setCustomer({ customerName: "", customerPhone: "", customerEmail: "" });
-    const online = data.business.onlinePaymentEnabled;
-    const store = data.business.payAtStoreEnabled;
-    setPaymentMethod(online && store ? null : online ? "ONLINE" : "PAY_AT_STORE");
+  const cancelAppointment = async (appointment) => {
+    if (!window.confirm("هل أنت متأكد أنك تريد إلغاء هذا الموعد؟")) return;
+    setCancelingId(appointment.id);
+    try {
+      await publicApi.cancelAppointment(slug, appointment.id, session.phone);
+      await refreshAppointments(session.phone);
+    } finally {
+      setCancelingId(null);
+    }
   };
 
-  if (done) {
-    const isRejected = done.status === "CANCELLED";
-    const isPending = done.status === "PENDING";
+  const addToCalendar = () => {
+    if (!success) return;
+    const start = new Date(success.startAt).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    const end = new Date(success.endAt).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      `SUMMARY:${business.name} - ${success.service}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "appointment.ics";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const shareAppointment = async () => {
+    if (!success) return;
+    const text = `موعدي في ${business.name}: ${success.service} يوم ${fmtDate(success.startAt)} الساعة ${fmtTime(success.startAt)}`;
+    if (navigator.share) await navigator.share({ text });
+    else await navigator.clipboard.writeText(text);
+  };
+
+  if (!session?.token) {
     return (
-      <BookingShell business={business} brandStyle={brandStyle}>
-        <div className="card card-pad success-screen">
-          <div className="success-circle">{isRejected ? "!" : isPending ? "..." : "✓"}</div>
-          <h2 style={{ fontSize: 24, fontWeight: 800 }}>
-            {isRejected ? t("bookingRejectedTitle") : isPending ? t("bookingPendingTitle") : t("bookingConfirmedTitle")}
-          </h2>
-          <p className="muted mt-1">
-            {isRejected ? t("bookingRejectedText") : isPending ? t("bookingPendingText") : t("bookingConfirmedText")}
-          </p>
-          <div className="mt-3">
-            <BookingConfirmation
-              data={{
-                bookingNumber: done.id,
-                business: done.business,
-                service: done.service,
-                employee: done.employee,
-                startAt: done.startAt,
-                endAt: done.endAt,
-                amount: done.paymentAmount,
-                paymentMethod: done.paymentMethod,
-                paymentStatus: done.paymentStatus,
-              }}
-            />
+      <div className="booking-mobile-page" style={brandStyle}>
+        <div className={`booking-login-card ${hasLoginImage ? "has-login-image" : ""}`} style={loginCardStyle}>
+          <div className="booking-login-top"><LanguageSwitcher /></div>
+          {!hasLoginImage && (
+            <div className="booking-login-visual">
+              <img src={business.logoUrl || "/oh-tech-logo.jpg"} alt={business.name} />
+            </div>
+          )}
+          <h1>أهلاً بك في {business.name}</h1>
+          <p>احجز دورك بسهولة وسرعة<br />في أي وقت ومن أي مكان</p>
+          <div className="booking-login-form">
+            <Field label="رقم الهاتف">
+              <div className="phone-entry">
+                <Input
+                  value={phone}
+                  onChange={(event) => {
+                    setPhone(normalizeLocalPhoneInput(event.target.value));
+                    setLoginMessage("");
+                    setCodeSent(false);
+                    setCode("");
+                  }}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="05XXXXXXXX"
+                />
+              </div>
+            </Field>
+            <Button size="lg" block loading={sendingCode} disabled={!phone} onClick={sendCode}>متابعة</Button>
+            {(loginMessage || devCode) && <div className="booking-login-message">{loginMessage}{devCode ? ` رمز التجربة: ${devCode}` : ""}</div>}
+            {codeSent && (
+              <>
+                <Field label="رمز التحقق">
+                  <Input value={code} onChange={(event) => setCode(event.target.value)} inputMode="numeric" placeholder="أدخل الرمز المرسل إلى واتساب" />
+                </Field>
+                <Button size="lg" block variant="secondary" loading={verifyingCode} disabled={!phone || !code} onClick={verifyCode}>تأكيد الرقم</Button>
+              </>
+            )}
           </div>
-          <Button className="mt-3" onClick={resetBooking}>{t("bookAnother")}</Button>
         </div>
-      </BookingShell>
+      </div>
     );
   }
 
   return (
-    <BookingShell business={business} brandStyle={brandStyle}>
-      <div className="stepper">
-        {steps.map((label, index) => (
-          <div key={label} className={`step-pill ${index === step ? "active" : index < step ? "done" : ""}`}>
-            <span className="step-num">{index < step ? "✓" : index + 1}</span> {label}
+    <div className="booking-mobile-page has-bottom-nav" style={brandStyle}>
+      <div className="booking-app-shell">
+        <header className="booking-app-header">
+          <div>
+            <span>أهلاً، {session.name || "ضيفنا"}</span>
+            <strong>{business.name}</strong>
           </div>
-        ))}
-      </div>
+          <img src={business.logoUrl || "/oh-tech-logo.jpg"} alt={business.name} />
+        </header>
 
-      <div className="card card-pad">
-        {step === 0 && (
-          <Section title={t("chooseService")}>
-            {services.length ? (
-              <div className="option-grid">
-                {services.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`option-card ${service?.id === item.id ? "selected" : ""}`}
-                    onClick={() => {
-                      setService(item);
-                      setEmployee(null);
-                      setStep(1);
-                    }}
-                  >
-                    <div className="option-title">{item.name}</div>
-                    {item.description && <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{item.description}</div>}
-                    <div className="option-meta">
-                      <span>{item.durationMinutes} {t("دقائق")}</span>
-                      <span>{Number(item.price || 0) === 0 ? t("freeService") : fmtPrice(item.price)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title={t("noServicesAvailable")} />
-            )}
-          </Section>
+        {activeTab === "home" && (
+          <main className="booking-app-content">
+            <section className="booking-home-hero">
+              <h2>من هنا تبدأ راحتك</h2>
+              <p>احجز، تابع مواعيدك، وألغِ الموعد القادم عند الحاجة.</p>
+              <Button size="lg" onClick={resetNewBooking}>احجز الآن</Button>
+            </section>
+            <section className="booking-panel">
+              <h3>موعدك القادم</h3>
+              {appointments[0] ? <AppointmentCard appointment={appointments[0]} onCancel={cancelAppointment} canceling={cancelingId === appointments[0].id} /> : <EmptyState title="لا يوجد موعد قادم" hint="احجز موعدك الأول الآن." />}
+            </section>
+          </main>
         )}
 
-        {step === 1 && (
-          <Section title={t("chooseEmployee")} onBack={() => setStep(0)} t={t}>
-            <div className="option-grid">
-              <div className={`option-card ${employee === null ? "selected" : ""}`} onClick={() => { setEmployee(null); setStep(2); }}>
-                <div className="option-title">{t("anyAvailableEmployee")}</div>
-                <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{t("autoChooseEmployee")}</div>
-              </div>
-              {eligibleEmployees.map((item) => (
-                <div key={item.id} className={`option-card ${employee?.id === item.id ? "selected" : ""}`} onClick={() => { setEmployee(item); setStep(2); }}>
-                  <div className="option-title">{item.name}</div>
-                  <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{item.title || t("employee")}</div>
-                </div>
-              ))}
+        {activeTab === "appointments" && (
+          <main className="booking-app-content">
+            <PageTitle title="مواعيدي" subtitle="كل المواعيد القادمة المرتبطة برقم هاتفك" />
+            {appointments.length ? appointments.map((appointment) => (
+              <AppointmentCard key={appointment.id} appointment={appointment} onCancel={cancelAppointment} canceling={cancelingId === appointment.id} />
+            )) : <EmptyState title="لا توجد مواعيد" hint="أي موعد مؤكد سيظهر هنا." />}
+          </main>
+        )}
+
+        {activeTab === "settings" && (
+          <main className="booking-app-content">
+            <PageTitle title="الإعدادات" subtitle="تفاصيلك الشخصية في صفحة الحجز" />
+            <div className="booking-panel">
+              <Field label="الاسم">
+                <Input value={customerForm.name} onChange={(event) => setCustomerForm((current) => ({ ...current, name: event.target.value }))} />
+              </Field>
+              <Field label="رقم الهاتف">
+                <Input value={session.phone} readOnly />
+              </Field>
+              <Field label="البريد الإلكتروني">
+                <Input value={customerForm.email} onChange={(event) => setCustomerForm((current) => ({ ...current, email: event.target.value }))} />
+              </Field>
+              <Button onClick={() => setSession((current) => ({ ...current, name: customerForm.name, email: customerForm.email }))}>حفظ التفاصيل</Button>
             </div>
-          </Section>
+          </main>
         )}
 
-        {step === 2 && (
-          <Section title={t("chooseDateTime")} onBack={() => setStep(1)} t={t}>
-            <Field label={t("date")}>
-              <Input type="date" value={date} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setDate(e.target.value)} style={{ maxWidth: 240 }} />
-            </Field>
-            <div className="mt-3">
-              {slots === null ? <Spinner /> : slots.length ? (
-                <div className="slots-grid">
-                  {slots.map((item) => (
-                    <button key={item.startAt} className={`slot ${slot?.startAt === item.startAt ? "selected" : ""}`} onClick={() => setSlot(item)}>
-                      {item.time}
+        {activeTab === "new" && (
+          <main className="booking-app-content">
+            {step !== "success" && <BackButton onClick={() => {
+              if (step === "service") setActiveTab("home");
+              if (step === "employee") setStep("service");
+              if (step === "time") setStep("employee");
+              if (step === "details") setStep("time");
+            }} />}
+            {step === "service" && (
+              <>
+                <PageTitle title="اختر الخدمة" subtitle="اختر الخدمة التي تريد حجز موعد لها" />
+                <Input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="بحث عن خدمة" />
+                <div className="booking-service-grid">
+                  {filteredServices.map((item) => (
+                    <button key={item.id} className="booking-service-card" onClick={() => chooseService(item)}>
+                      {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <span>{serviceIcon(item.name)}</span>}
+                      <strong>{item.name}</strong>
+                      <small>{item.durationMinutes} دقيقة - {Number(item.price || 0) === 0 ? "مجانية" : fmtPrice(item.price)}</small>
                     </button>
                   ))}
                 </div>
-              ) : closedNotice ? (
-                <EmptyState
-                  title={t("closedTodayTitle")}
-                  hint={closedNotice.nextOpenDate ? `${t("nextOpenPrefix")} ${openDayText(closedNotice.nextOpenDate)}` : `${t("nextOpenPrefix")} ${t("nearestWorkingDay")}`}
-                />
-              ) : (
-                <EmptyState title={t("allSlotsBooked")} hint={t("tryAnotherDayOrEmployee")} />
-              )}
-            </div>
-            {slot && (
-              <div className="mt-3">
-                <Button size="lg" block onClick={() => setStep(3)}>
-                  {t("continue")} - {slot.time}{employee ? "" : ` (${slot.employeeName})`}
-                </Button>
-              </div>
+              </>
             )}
-          </Section>
-        )}
 
-        {step === 3 && (
-          <Section title={t("enterYourDetails")} onBack={() => setStep(2)} t={t}>
-            <div className="card card-pad" style={{ background: "var(--primary-soft)", borderColor: "transparent", marginBottom: 18 }}>
-              <div className="row-between" style={{ fontSize: 14 }}>
-                <span>{service.name} - {employee?.name || slot.employeeName}</span>
-                <span style={{ fontWeight: 700 }}>{fmtDate(slot.startAt)} - {slot.time}</span>
-              </div>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); confirm(); }} className="col" style={{ gap: 16 }}>
-              <Field label={t("fullName")}>
-                <Input value={customer.customerName} onChange={(e) => setCustomer({ ...customer, customerName: e.target.value })} required />
-              </Field>
-              <Field label={t("phoneNumber")}>
-                <Input type="tel" value={customer.customerPhone} onChange={(e) => setCustomer({ ...customer, customerPhone: e.target.value })} required placeholder="05xxxxxxxx" />
-              </Field>
-              <Field label={t("optionalEmail")}>
-                <Input type="email" value={customer.customerEmail} onChange={(e) => setCustomer({ ...customer, customerEmail: e.target.value })} />
-              </Field>
+            {step === "employee" && (
+              <>
+                <PageTitle title="اختر العامل" subtitle="اختر العامل الذي تفضل الحجز معه" />
+                <button className={`booking-employee-card ${employee === null ? "selected" : ""}`} onClick={() => chooseEmployee(null)}>
+                  <div><strong>أي عامل متاح</strong><span>النظام يختار أقرب وقت مناسب</span></div><i />
+                </button>
+                {serviceEmployees.map((item) => (
+                  <button key={item.id} className={`booking-employee-card ${employee?.id === item.id ? "selected" : ""}`} onClick={() => chooseEmployee(item)}>
+                    <div><strong>{item.name}</strong><span>{item.title || "مقدم خدمة"}</span></div><i />
+                  </button>
+                ))}
+              </>
+            )}
 
-              {isServiceFree ? (
-                <Notice tone="success">{t("freeServicePaymentHint")}</Notice>
-              ) : methods.length === 0 ? (
-                <Notice tone="danger">{t("bookingUnavailableNoPayment")}</Notice>
-              ) : (
-                <Field label={t("paymentMethod")}>
-                  <div className="option-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-                    {methods.map((method) => (
-                      <div key={method} className={`option-card ${paymentMethod === method ? "selected" : ""}`} onClick={() => setPaymentMethod(method)} style={{ padding: 14 }}>
-                        <div className="option-title">{method === "ONLINE" ? t("onlinePayment") : t("payAtStore")}</div>
-                        <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>
-                          {method === "ONLINE" ? t("payOnlineHint") : t("payAtStoreHint")}
-                        </div>
-                      </div>
+            {step === "time" && (
+              <>
+                <PageTitle title="اختر الموعد" subtitle="اختر التاريخ واليوم والوقت المناسب لك" />
+                <div className="booking-week-strip">
+                  {Array.from({ length: 7 }).map((_, index) => {
+                    const date = addDays(new Date(), index);
+                    const dateStr = dateInputFrom(date);
+                    return (
+                      <button key={dateStr} className={selectedDate === dateStr ? "active" : ""} onClick={() => setSelectedDate(dateStr)}>
+                        <span>{dayKeys[date.getDay()]}</span><strong>{date.getDate()}</strong>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="booking-month-head">
+                  <button onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}>‹</button>
+                  <strong>{monthNames[monthDate.getMonth()]} {monthDate.getFullYear()}</strong>
+                  <button onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>›</button>
+                </div>
+                <div className="booking-calendar">
+                  {dayKeys.map((day) => <span key={day}>{day}</span>)}
+                  {calendarDays(monthDate).map((date) => {
+                    const dateStr = dateInputFrom(date);
+                    const status = monthStatus[dateStr];
+                    const disabled = status === "past" || status === "closed" || date.getMonth() !== monthDate.getMonth();
+                    return (
+                      <button key={dateStr} disabled={disabled} className={`${selectedDate === dateStr ? "active" : ""} ${disabled ? "disabled" : ""} ${status === "unavailable" ? "unavailable" : ""}`} onClick={() => setSelectedDate(dateStr)}>
+                        {date.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+                <h3 className="booking-section-title">اختر الوقت</h3>
+                {slots === null ? <Spinner /> : slots.length ? (
+                  <div className="booking-slots">
+                    {slots.map((item) => (
+                      <button key={item.startAt} className={slot?.startAt === item.startAt ? "active" : ""} onClick={() => setSlot(item)}>
+                        {item.time}
+                      </button>
                     ))}
                   </div>
-                </Field>
-              )}
+                ) : <EmptyState title="لا توجد أوقات متاحة" hint="اختر يومًا آخر أو عاملًا آخر." />}
+                <Button size="lg" block disabled={!slot} onClick={() => setStep("details")}>تأكيد الموعد</Button>
+              </>
+            )}
 
-              {bookErr && <Notice tone="danger">{bookErr}</Notice>}
+            {step === "details" && (
+              <>
+                <PageTitle title="تأكيد الحجز" subtitle="أدخل تفاصيل طالب الخدمة قبل إرسال الطلب" />
+                <div className="booking-panel">
+                  <Field label="الاسم">
+                    <Input value={customerForm.name} onChange={(event) => setCustomerForm((current) => ({ ...current, name: event.target.value }))} required />
+                  </Field>
+                  <Field label="البريد الإلكتروني (اختياري)">
+                    <Input value={customerForm.email} onChange={(event) => setCustomerForm((current) => ({ ...current, email: event.target.value }))} />
+                  </Field>
+                  {Number(service.price || 0) > 0 && (
+                    <Field label="طريقة الدفع">
+                      <Select value={paymentMethod || ""} onChange={(event) => setPaymentMethod(event.target.value)}>
+                        <option value="">اختر طريقة الدفع</option>
+                        {methods.includes("PAY_AT_STORE") && <option value="PAY_AT_STORE">الدفع في المحل</option>}
+                        {methods.includes("ONLINE") && <option value="ONLINE">الدفع الإلكتروني</option>}
+                      </Select>
+                    </Field>
+                  )}
+                  {Number(service.price || 0) === 0 && <div className="booking-free-note">هذه الخدمة مجانية</div>}
+                  {bookErr && <div className="error-text">{bookErr}</div>}
+                  <Button size="lg" block loading={booking} onClick={confirmBooking}>حفظ الطلب</Button>
+                </div>
+              </>
+            )}
 
-              <Button type="submit" size="lg" block loading={booking} disabled={!isServiceFree && (methods.length === 0 || !paymentMethod)}>
-                {isServiceFree ? t("confirmFreeBooking") : paymentMethod === "ONLINE" ? `${t("continueToPayment")} - ${fmtPrice(service.price)}` : t("confirmBooking")}
-              </Button>
-            </form>
-          </Section>
+            {step === "success" && success && (
+              <SuccessView appointment={success} business={business} onCalendar={addToCalendar} onShare={shareAppointment} onHome={() => setActiveTab("home")} />
+            )}
+          </main>
         )}
-      </div>
 
-      <p className="text-center muted mt-3" style={{ fontSize: 13 }}>{t("poweredByBooking")}</p>
-    </BookingShell>
-  );
-}
-
-function BookingShell({ business, brandStyle, children }) {
-  const { t } = useLanguage();
-  return (
-    <div className="booking-page" style={brandStyle}>
-      <div className="booking-language">
-        <LanguageSwitcher />
+        <nav className="booking-bottom-nav">
+          <button className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}><span>⌂</span>الرئيسية</button>
+          <button className={activeTab === "appointments" ? "active" : ""} onClick={() => { refreshAppointments(); setActiveTab("appointments"); }}><span>□</span>مواعيدي</button>
+          <button className="book-now" onClick={resetNewBooking}><b>+</b><span>احجز الآن</span></button>
+          <button className={activeTab === "settings" ? "active" : ""} onClick={() => setActiveTab("settings")}><span>⚙</span>الإعدادات</button>
+        </nav>
       </div>
-      <div className="booking-hero">
-        {business.logoUrl && <img className="booking-logo" src={business.logoUrl} alt={business.name} />}
-        <h1>{business.name}</h1>
-        <p>{business.address || t("bookEasily")}</p>
-      </div>
-      <div className="booking-container">{children}</div>
-    </div>
-  );
-}
-
-function Section({ title, onBack, t, children }) {
-  return (
-    <div>
-      <div className="row" style={{ marginBottom: 18 }}>
-        {onBack && <button className="icon-btn" onClick={onBack} title={t?.("back")} aria-label={t?.("back")}>→</button>}
-        <h3 className="card-title">{title}</h3>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Notice({ tone, children }) {
-  const styles = {
-    success: { background: "var(--success-soft)", color: "var(--success)" },
-    danger: { background: "var(--danger-soft)", color: "var(--danger)" },
-  }[tone];
-  return (
-    <div className="card" style={{ ...styles, borderColor: "transparent", padding: "12px 16px", fontWeight: 700, fontSize: 14 }}>
-      {children}
+      {wazeUrl && <a className="waze-floating-button" href={wazeUrl} target="_blank" rel="noreferrer" aria-label="Waze"><img src="/waze.jpg" alt="" /></a>}
     </div>
   );
 }
 
 function CenterCard({ children }) {
+  return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 20 }}>{children}</div>;
+}
+
+function PageTitle({ title, subtitle }) {
+  return <div className="booking-page-title"><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>;
+}
+
+function BackButton({ onClick }) {
+  return <button className="booking-back" onClick={onClick} aria-label="رجوع">←</button>;
+}
+
+function AppointmentCard({ appointment, onCancel, canceling }) {
+  const future = new Date(appointment.startAt) > new Date();
   return (
-    <div style={{ display: "grid", placeItems: "center", minHeight: "100vh", padding: 20 }}>
-      <div className="card card-pad" style={{ maxWidth: 420, width: "100%" }}>{children}</div>
+    <article className="booking-appointment-card">
+      <strong>{appointment.service}</strong>
+      <span>{appointment.employee}</span>
+      <p>{fmtDate(appointment.startAt)} - {fmtTime(appointment.startAt)} حتى {fmtTime(appointment.endAt)}</p>
+      <small>{appointment.paymentStatus === "PAID" ? "مدفوع" : Number(appointment.paymentAmount || 0) === 0 ? "مجانية" : "بانتظار الدفع"}</small>
+      {future && <Button size="sm" variant="danger" loading={canceling} onClick={() => onCancel(appointment)}>إلغاء الموعد</Button>}
+    </article>
+  );
+}
+
+function SuccessView({ appointment, business, onCalendar, onShare, onHome }) {
+  return (
+    <div className="booking-success">
+      <div className="booking-success-check">✓</div>
+      <h2>تم حجز موعدك بنجاح!</h2>
+      <p>نتطلع لرؤيتك قريبًا</p>
+      <div className="booking-success-card">
+        <Row label="الخدمة" value={appointment.service} />
+        <Row label="العامل" value={appointment.employee} />
+        <Row label="التاريخ" value={fmtDate(appointment.startAt)} />
+        <Row label="الوقت" value={fmtTime(appointment.startAt)} />
+        <Row label="رقم الحجز" value={`#${appointment.id}`} />
+      </div>
+      <Button size="lg" block onClick={onCalendar}>إضافة إلى التقويم</Button>
+      <Button size="lg" block variant="secondary" onClick={onShare}>مشاركة الموعد</Button>
+      <button className="booking-home-link" onClick={onHome}>العودة للرئيسية في {business.name}</button>
     </div>
   );
 }
+
+function Row({ label, value }) {
+  return <div><span>{label}</span><strong>{value}</strong></div>;
+}
+
