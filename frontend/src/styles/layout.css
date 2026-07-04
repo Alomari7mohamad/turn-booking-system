@@ -87,9 +87,28 @@
 .nav-link-group-title {
   width: 100%;
   border: 0;
-  cursor: default;
+  cursor: pointer;
   font: inherit;
   text-align: inherit;
+  background: transparent;
+}
+.nav-link.nav-link-group-title:hover,
+.nav-link.nav-link-group-title.open {
+  background: transparent;
+  color: var(--text-muted);
+}
+.nav-link.nav-link-group-title:hover {
+  color: var(--text);
+}
+.nav-caret {
+  margin-inline-start: auto;
+  font-size: 12px;
+  color: var(--text-soft);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+.nav-link-group-title.open .nav-caret {
+  transform: rotate(180deg);
+  color: var(--primary);
 }
 .nav-link:hover {
   background: var(--surface-2);
@@ -116,9 +135,15 @@
   color: var(--primary);
 }
 .nav-link .nav-ico {
-  font-size: 18px;
   width: 22px;
-  text-align: center;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: currentColor;
+}
+.nav-svg-icon {
+  display: block;
 }
 .nav-link-secondary .nav-ico {
   width: 18px;

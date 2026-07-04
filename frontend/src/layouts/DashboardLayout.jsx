@@ -3,25 +3,25 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { LanguageSwitcher } from "../components/GlobalControls.jsx";
-import { BellIcon } from "../components/Icons.jsx";
+import { BellIcon, NavIcon } from "../components/Icons.jsx";
 import { adminFavicon, setFavicon } from "../favicon.js";
 import { applyBrandTheme, resetBrandTheme } from "../brandTheme.js";
 import { businessApi } from "../api/endpoints.js";
 
 const NAV = {
   SUPER_ADMIN: [
-    { to: "/admin", icon: "▦", labelKey: "navDashboard", end: true },
-    { to: "/admin/statistics", icon: "▥", labelKey: "navStatistics" },
-    { to: "/admin/businesses", icon: "▣", labelKey: "navBusinesses" },
-    { to: "/admin/managers", icon: "◉", labelKey: "navManagers" },
+    { to: "/admin", icon: "dashboard", labelKey: "navDashboard", end: true },
+    { to: "/admin/statistics", icon: "statistics", labelKey: "navStatistics" },
+    { to: "/admin/businesses", icon: "businesses", labelKey: "navBusinesses" },
+    { to: "/admin/managers", icon: "managers", labelKey: "navManagers" },
   ],
   BUSINESS_OWNER: [
-    { to: "/dashboard", icon: "▦", labelKey: "navDashboard", end: true },
-    { to: "/dashboard/statistics", icon: "▥", labelKey: "navStatistics" },
-    { to: "/dashboard/customers", icon: "◎", labelKey: "navCustomers", requiresCustomerHub: true },
+    { to: "/dashboard", icon: "dashboard", labelKey: "navDashboard", end: true },
+    { to: "/dashboard/statistics", icon: "statistics", labelKey: "navStatistics" },
+    { to: "/dashboard/customers", icon: "customers", labelKey: "navCustomers", requiresCustomerHub: true },
     {
       to: "/dashboard/appointments",
-      icon: "□",
+      icon: "appointments",
       labelKey: "navAppointments",
       children: [
         { to: "/dashboard/appointments", labelKey: "navAppointments", end: true },
@@ -29,26 +29,26 @@ const NAV = {
         { to: "/dashboard/appointments/rejected", labelKey: "navRejectedAppointments" },
       ],
     },
-    { to: "/dashboard/services", icon: "◇", labelKey: "navServices" },
-    { to: "/dashboard/employees", icon: "◉", labelKey: "navEmployees" },
+    { to: "/dashboard/services", icon: "services", labelKey: "navServices" },
+    { to: "/dashboard/employees", icon: "employees", labelKey: "navEmployees" },
     {
       to: "/dashboard/accounts",
-      icon: "₪",
+      icon: "accounts",
       labelKey: "navAccounts",
       children: [
         { to: "/dashboard/accounts", labelKey: "navAccountsOverview", end: true },
         { to: "/dashboard/accounts/payments", labelKey: "navAppointmentPayments" },
       ],
     },
-    { to: "/dashboard/working-hours", icon: "◷", labelKey: "navWorkingHours" },
-    { to: "/dashboard/subscription", icon: "◇", labelKey: "navSubscription" },
-    { to: "/dashboard/activity", icon: "☷", labelKey: "navActivity" },
-    { to: "/dashboard/settings", icon: "⚙", labelKey: "navSettings" },
+    { to: "/dashboard/working-hours", icon: "workingHours", labelKey: "navWorkingHours" },
+    { to: "/dashboard/subscription", icon: "subscription", labelKey: "navSubscription" },
+    { to: "/dashboard/activity", icon: "activity", labelKey: "navActivity" },
+    { to: "/dashboard/settings", icon: "settings", labelKey: "navSettings" },
   ],
   STAFF: [
-    { to: "/staff", icon: "□", labelKey: "navStaffAppointments", end: true },
-    { to: "/staff/queue", icon: "☷", labelKey: "navQueueManagement", requiresSecretary: true },
-    { to: "/staff/accounts", icon: "₪", labelKey: "navAccounts", requiresSecretary: true },
+    { to: "/staff", icon: "appointments", labelKey: "navStaffAppointments", end: true },
+    { to: "/staff/queue", icon: "queue", labelKey: "navQueueManagement", requiresSecretary: true },
+    { to: "/staff/accounts", icon: "accounts", labelKey: "navAccounts", requiresSecretary: true },
   ],
 };
 const ROLE_KEY = {
@@ -127,6 +127,7 @@ export function DashboardLayout() {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [sidebarClosed, setSidebarClosed] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState({});
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const knownNotificationIds = useRef(new Set());
@@ -163,6 +164,10 @@ export function DashboardLayout() {
       adminFavicon();
     };
   }, [isAdmin, user?.business?.logoUrl, user?.business?.brandColor]);
+
+  useEffect(() => {
+    setExpandedGroups({});
+  }, [location.pathname]);
 
   const currentLabelKey =
     flatLinks
@@ -254,13 +259,26 @@ export function DashboardLayout() {
         <nav className="nav">
           <div className="nav-section">{t("mainMenu")}</div>
           {links.map((link) => {
-            const submenuOpen = link.children?.length && location.pathname.startsWith(link.to);
+            const hasChildren = Boolean(link.children?.length);
+            const pathnameOpen = hasChildren && location.pathname.startsWith(link.to);
+            const submenuOpen = hasChildren && (pathnameOpen || expandedGroups[link.to]);
             return (
               <div key={link.to} className={submenuOpen ? "nav-group open" : "nav-group"}>
-                {link.children?.length ? (
-                  <button type="button" className={`nav-link nav-link-group-title ${submenuOpen ? "active" : ""}`}>
-                    <span className="nav-ico">{link.icon}</span>
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    className={`nav-link nav-link-group-title ${submenuOpen ? "open" : ""}`}
+                    aria-expanded={submenuOpen}
+                    onClick={() =>
+                      setExpandedGroups((current) => ({
+                        ...current,
+                        [link.to]: !submenuOpen,
+                      }))
+                    }
+                  >
+                    <span className="nav-ico"><NavIcon name={link.icon} /></span>
                     {t(link.labelKey)}
+                    <span className="nav-caret" aria-hidden="true">▾</span>
                   </button>
                 ) : (
                   <NavLink
@@ -269,7 +287,7 @@ export function DashboardLayout() {
                     className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
                     onClick={() => setOpen(false)}
                   >
-                    <span className="nav-ico">{link.icon}</span>
+                    <span className="nav-ico"><NavIcon name={link.icon} /></span>
                     {t(link.labelKey)}
                   </NavLink>
                 )}
