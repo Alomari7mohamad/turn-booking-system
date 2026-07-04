@@ -4,6 +4,8 @@ import { api } from "./client.js";
 export const authApi = {
   login: (data) => api.post("/auth/login", data).then((r) => r.data),
   me: () => api.get("/auth/me").then((r) => r.data),
+  forgotPassword: (data) => api.post("/auth/forgot-password", data).then((r) => r.data),
+  resetPassword: (data) => api.post("/auth/reset-password", data).then((r) => r.data),
 };
 
 export const adminApi = {

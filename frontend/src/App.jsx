@@ -7,6 +7,8 @@ import { AppFooter } from "./components/AppFooter.jsx";
 import { DashboardLayout } from "./layouts/DashboardLayout.jsx";
 
 import Login from "./pages/Login.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 import PublicBooking from "./pages/PublicBooking.jsx";
 import PublicReview from "./pages/PublicReview.jsx";
 import PrintTicketPage from "./pages/PrintTicketPage.jsx";
@@ -51,12 +53,15 @@ function RoleHome() {
 export default function App() {
   const location = useLocation();
   const isPublicBooking = location.pathname.startsWith("/book/");
+  const isAuthPage = ["/login", "/forgot-password", "/reset-password"].includes(location.pathname);
 
   return (
     <>
       <GlobalControls />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/privacy" element={<PolicyPage type="privacy" />} />
         <Route path="/terms" element={<PolicyPage type="terms" />} />
         <Route path="/book/:slug" element={<PublicBooking />} />
@@ -140,7 +145,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      {!isPublicBooking && <AppFooter />}
+      {!isPublicBooking && !isAuthPage && <AppFooter />}
     </>
   );
 }

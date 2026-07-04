@@ -1,6 +1,7 @@
 let imageColumnsReady = false;
 let customerProfileColumnsReady = false;
 let businessFeatureColumnsReady = false;
+let passwordResetTableReady = false;
 
 async function executeIgnoringDuplicateColumn(client, statement) {
   try {
@@ -60,4 +61,27 @@ export async function ensureCustomerProfileColumns(client) {
   await executeIgnoringDuplicateColumn(client, "ALTER TABLE `customers` ADD COLUMN `date_of_birth` DATETIME NULL");
 
   customerProfileColumnsReady = true;
+}
+
+export async function ensurePasswordResetTable(client) {
+  if (passwordResetTableReady) return;
+
+  await client.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS \`password_reset_tokens\` (
+      \`id\` INT NOT NULL AUTO_INCREMENT,
+      \`user_id\` INT NOT NULL,
+      \`token_hash\` VARCHAR(191) NOT NULL,
+      \`expires_at\` DATETIME(3) NOT NULL,
+      \`used_at\` DATETIME(3) NULL,
+      \`created_at\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      PRIMARY KEY (\`id\`),
+      UNIQUE INDEX \`password_reset_tokens_token_hash_key\` (\`token_hash\`),
+      INDEX \`password_reset_tokens_user_id_idx\` (\`user_id\`),
+      CONSTRAINT \`password_reset_tokens_user_id_fkey\`
+        FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`)
+        ON DELETE CASCADE ON UPDATE CASCADE
+    )
+  `);
+
+  passwordResetTableReady = true;
 }

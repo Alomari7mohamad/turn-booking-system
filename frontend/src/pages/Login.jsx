@@ -16,13 +16,29 @@ const demoAccounts = [
 
 export default function Login() {
   const { login } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const toast = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const isHebrew = language === "he";
+  const copy = isHebrew
+    ? {
+        forgot: "שכחת סיסמה?",
+        helpTitle: "צריך עזרה?",
+        helpText: "צור קשר עם תמיכת הלקוחות",
+        credit: "האתר נבנה על ידי",
+      }
+    : {
+        forgot: "نسيت كلمة المرور؟",
+        helpTitle: "محتاج مساعدة؟",
+        helpText: "تواصل مع دعم العملاء",
+        credit: "تم بناء هذا الموقع في شركة",
+      };
+  const supportWhatsappUrl = `https://wa.me/972506446682?text=${encodeURIComponent("مرحبا، أريد مساعدة")}`;
 
   useEffect(() => {
     resetBrandTheme();
@@ -45,34 +61,43 @@ export default function Login() {
 
   return (
     <div className="auth-wrap" data-no-auto-translate="true">
-      <div className="auth-language">
-        <LanguageSwitcher />
-      </div>
-
       <aside className="auth-aside">
-        <div className="brand-logo login-logo">
-          <img src="/oh-tech-logo.jpg" alt="O&H Tech" />
+        <div className="auth-aside-logo">
+          <img src="/oh-tech-logo2-transparent.png" alt="O&H Tech" />
         </div>
         <h1>{t("platformTitle")}</h1>
         <p>{t("platformSubtitle")}</p>
-        <div className="col" style={{ gap: 14, marginTop: 10 }}>
-          <div className="auth-feature"><span>✓</span> {t("dataIsolation")}</div>
+        <div className="auth-feature-list">
           <div className="auth-feature"><span>✓</span> {t("smartBooking")}</div>
+          <div className="auth-feature"><span>✓</span> {t("dataIsolation")}</div>
           <div className="auth-feature"><span>✓</span> {t("publicPage")}</div>
         </div>
       </aside>
 
       <div className="auth-form-side">
         <div className="auth-card">
-          <h2 style={{ fontSize: 26, fontWeight: 800 }}>{t("loginTitle")}</h2>
-          <p className="muted" style={{ marginBottom: 22 }}>{t("loginSubtitle")}</p>
+          <div className="auth-card-language">
+            <LanguageSwitcher />
+          </div>
 
-          <form onSubmit={submit} className="col" style={{ gap: 16 }}>
+          <div className="auth-mobile-logo">
+            <img src="/oh-tech-logo2-transparent.png" alt="O&H Tech" />
+          </div>
+
+          <h2>{t("loginTitle")}</h2>
+          <p>{t("loginSubtitle")}</p>
+
+          <form onSubmit={submit} className="auth-login-form">
             <Field label={t("email")}>
-              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required />
+              <div className="auth-input-wrap">
+                <MailIcon />
+                <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required />
+              </div>
             </Field>
+
             <Field label={t("password")}>
-              <div className="password-input">
+              <div className="password-input auth-input-wrap">
+                <LockIcon />
                 <Input
                   type={showPassword ? "text" : "password"}
                   value={password}
@@ -91,6 +116,12 @@ export default function Login() {
                 </button>
               </div>
             </Field>
+
+            <div className="auth-form-options">
+              <span />
+              <Link to="/forgot-password">{copy.forgot}</Link>
+            </div>
+
             <Button type="submit" size="lg" block loading={loading}>
               {t("login")}
             </Button>
@@ -115,14 +146,38 @@ export default function Login() {
             </div>
           </div>
 
+          <a className="auth-help" href={supportWhatsappUrl} target="_blank" rel="noreferrer">
+            <strong>{copy.helpTitle}</strong>
+            <span>{copy.helpText}</span>
+          </a>
+
           <div className="auth-policy-links">
             <Link to="/privacy">{t("privacyPolicy")}</Link>
             <span>·</span>
             <Link to="/terms">{t("sitePolicy")}</Link>
           </div>
+          <div className="auth-credit">
+            {copy.credit} <a href="https://oh-tech.co" target="_blank" rel="noreferrer">O&H Tech</a>
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false" className="auth-input-icon">
+      <path fill="currentColor" d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm0 3.2V17h16V8.2l-7.4 5a1 1 0 0 1-1.2 0L4 8.2ZM5.7 7 12 11.25 18.3 7H5.7Z" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false" className="auth-input-icon">
+      <path fill="currentColor" d="M7 10V8a5 5 0 0 1 10 0v2h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h1Zm2 0h6V8a3 3 0 0 0-6 0v2Zm3 4a1.4 1.4 0 0 0-.75 2.58V18h1.5v-1.42A1.4 1.4 0 0 0 12 14Z" />
+    </svg>
   );
 }
 

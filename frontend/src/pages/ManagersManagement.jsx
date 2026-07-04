@@ -7,6 +7,18 @@ import { Button, Field, Input, Spinner, EmptyState, fmtDate } from "../component
 
 const emptyForm = { id: null, name: "", phone: "", email: "", password: "" };
 
+function PasswordEye({ visible }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false" className="password-eye-icon">
+      {visible ? (
+        <path fill="currentColor" d="M4.3 3 21 19.7 19.7 21l-3-3A10 10 0 0 1 12 19c-5 0-8.5-4.5-9.5-7a13.2 13.2 0 0 1 3.2-4.35L3 4.3 4.3 3Zm3 6.35A9.4 9.4 0 0 0 4.75 12c1 2.15 3.7 5 7.25 5 1.1 0 2.12-.27 3.02-.7l-1.72-1.72a2.8 2.8 0 0 1-3.88-3.88L7.3 9.35ZM12 5c5 0 8.5 4.5 9.5 7a12.6 12.6 0 0 1-2.25 3.35l-1.42-1.42A9.6 9.6 0 0 0 19.25 12c-1-2.15-3.7-5-7.25-5-.77 0-1.5.13-2.18.36L8.25 5.78A9.5 9.5 0 0 1 12 5Z" />
+      ) : (
+        <path fill="currentColor" d="M12 5c5 0 8.5 4.5 9.5 7-1 2.5-4.5 7-9.5 7s-8.5-4.5-9.5-7C3.5 9.5 7 5 12 5Zm0 2c-3.55 0-6.25 2.85-7.25 5 1 2.15 3.7 5 7.25 5s6.25-2.85 7.25-5c-1-2.15-3.7-5-7.25-5Zm0 2.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6Z" />
+      )}
+    </svg>
+  );
+}
+
 export default function ManagersManagement() {
   const toast = useToast();
   const { t } = useLanguage();
@@ -14,12 +26,14 @@ export default function ManagersManagement() {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const load = () => adminApi.listManagers().then((r) => setManagers(r.managers));
   useEffect(() => { load(); }, []);
 
   const openCreate = () => {
     setForm(emptyForm);
+    setShowPassword(false);
     setModal(true);
   };
 
@@ -31,6 +45,7 @@ export default function ManagersManagement() {
       email: manager.email || "",
       password: "",
     });
+    setShowPassword(false);
     setModal(true);
   };
 
@@ -122,7 +137,18 @@ export default function ManagersManagement() {
           <Field label={t("phone")}><Input value={form.phone} onChange={set("phone")} /></Field>
           <Field label={t("email")}><Input type="email" value={form.email} onChange={set("email")} required /></Field>
           <Field label={t("password")} hint={form.id ? t("leavePasswordBlank") : ""}>
-            <Input type="text" value={form.password} onChange={set("password")} required={!form.id} />
+            <div className="password-field">
+              <Input type={showPassword ? "text" : "password"} value={form.password} onChange={set("password")} required={!form.id} />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? "إخفاء كلمة السر" : "إظهار كلمة السر"}
+                title={showPassword ? "إخفاء كلمة السر" : "إظهار كلمة السر"}
+              >
+                <PasswordEye visible={showPassword} />
+              </button>
+            </div>
           </Field>
         </form>
       </Modal>

@@ -90,6 +90,7 @@ export default function PublicBooking() {
   const [selectedDate, setSelectedDate] = useState(todayInput());
   const [monthDate, setMonthDate] = useState(() => new Date());
   const [monthStatus, setMonthStatus] = useState({});
+  const [monthLoading, setMonthLoading] = useState(false);
   const [slots, setSlots] = useState(null);
   const [slot, setSlot] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState(null);
@@ -129,6 +130,7 @@ export default function PublicBooking() {
     return result;
   }, [business]);
   const filteredServices = services.filter((item) => item.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()));
+  const paymentMethodLabel = paymentMethod === "ONLINE" ? "الدفع الإلكتروني" : paymentMethod === "PAY_AT_STORE" ? "الدفع في المحل" : "";
 
   const refreshAppointments = async (targetPhone = session?.phone) => {
     if (!targetPhone) return;
@@ -199,6 +201,12 @@ export default function PublicBooking() {
 
   useEffect(() => {
     if (activeTab !== "new" || step !== "time" || !service) return;
+    const selectedStatus = monthStatus[selectedDate];
+    if (monthLoading || selectedStatus !== "available") {
+      setSlots(monthLoading ? null : []);
+      setSlot(null);
+      return;
+    }
     let cancelled = false;
     setSlots(null);
     setSlot(null);
@@ -212,11 +220,15 @@ export default function PublicBooking() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, step, service, employee, selectedDate, slug]);
+  }, [activeTab, step, service, employee, selectedDate, slug, monthLoading, monthStatus]);
 
   useEffect(() => {
     if (activeTab !== "new" || step !== "time" || !service) return;
     let cancelled = false;
+    setMonthLoading(true);
+    setMonthStatus({});
+    setSlots(null);
+    setSlot(null);
     const days = calendarDays(monthDate);
     Promise.all(days.map(async (date) => {
       const dateStr = dateInputFrom(date);
@@ -229,12 +241,33 @@ export default function PublicBooking() {
         return [dateStr, "closed"];
       }
     })).then((entries) => {
-      if (!cancelled) setMonthStatus(Object.fromEntries(entries));
+      if (cancelled) return;
+      const nextStatus = Object.fromEntries(entries);
+      setMonthStatus(nextStatus);
+      setSelectedDate((currentDate) => {
+        if (nextStatus[currentDate] === "available") return currentDate;
+        const firstAvailable = entries.find(([dateStr, status]) => {
+          const date = new Date(`${dateStr}T00:00:00`);
+          return status === "available" && date.getMonth() === monthDate.getMonth();
+        });
+        return firstAvailable ? firstAvailable[0] : currentDate;
+      });
+      setMonthLoading(false);
+    }).catch(() => {
+      if (!cancelled) {
+        setMonthStatus({});
+        setMonthLoading(false);
+      }
     });
     return () => {
       cancelled = true;
     };
   }, [activeTab, step, service, employee, monthDate, slug]);
+
+  useEffect(() => {
+    if (methods.length === 1) setPaymentMethod(methods[0]);
+    if (methods.length === 0) setPaymentMethod(null);
+  }, [methods]);
 
   if (error) return <CenterCard><EmptyState title="تعذر فتح صفحة الحجز" hint={error} /></CenterCard>;
   if (!data) return <Spinner page />;
@@ -255,11 +288,20 @@ export default function PublicBooking() {
   const chooseService = (item) => {
     setService(item);
     setEmployee(null);
+    setMonthStatus({});
+    setMonthLoading(false);
+    setSlots(null);
+    setSlot(null);
+    setPaymentMethod(methods.length === 1 ? methods[0] : null);
     setStep("employee");
   };
 
   const chooseEmployee = (item) => {
     setEmployee(item);
+    setMonthStatus({});
+    setMonthLoading(false);
+    setSlots(null);
+    setSlot(null);
     setStep("time");
   };
 
@@ -518,19 +560,32 @@ export default function PublicBooking() {
                   <strong>{monthNames[monthDate.getMonth()]} {monthDate.getFullYear()}</strong>
                   <button onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>›</button>
                 </div>
-                <div className="booking-calendar">
-                  {dayKeys.map((day) => <span key={day}>{day}</span>)}
-                  {calendarDays(monthDate).map((date) => {
-                    const dateStr = dateInputFrom(date);
-                    const status = monthStatus[dateStr];
-                    const disabled = status === "past" || status === "closed" || date.getMonth() !== monthDate.getMonth();
-                    return (
-                      <button key={dateStr} disabled={disabled} className={`${selectedDate === dateStr ? "active" : ""} ${disabled ? "disabled" : ""} ${status === "unavailable" ? "unavailable" : ""}`} onClick={() => setSelectedDate(dateStr)}>
-                        {date.getDate()}
-                      </button>
-                    );
-                  })}
-                </div>
+                {monthLoading ? (
+                  <div className="booking-calendar-loading"><Spinner /><span>جاري فحص الأيام المتاحة...</span></div>
+                ) : (
+                  <div className="booking-calendar">
+                    {dayKeys.map((day) => <span key={day}>{day}</span>)}
+                    {calendarDays(monthDate).map((date) => {
+                      const dateStr = dateInputFrom(date);
+                      const status = monthStatus[dateStr];
+                      const outsideMonth = date.getMonth() !== monthDate.getMonth();
+                      const disabled = outsideMonth || status !== "available";
+                      const active = selectedDate === dateStr && status === "available";
+                      return (
+                        <button
+                          key={dateStr}
+                          disabled={disabled}
+                          className={`${active ? "active" : ""} ${disabled ? "disabled" : ""} ${status === "unavailable" ? "unavailable" : ""} ${status === "closed" ? "closed" : ""}`}
+                          onClick={() => {
+                            if (status === "available") setSelectedDate(dateStr);
+                          }}
+                        >
+                          {date.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <h3 className="booking-section-title">اختر الوقت</h3>
                 {slots === null ? <Spinner /> : slots.length ? (
                   <div className="booking-slots">
@@ -557,11 +612,15 @@ export default function PublicBooking() {
                   </Field>
                   {Number(service.price || 0) > 0 && (
                     <Field label="طريقة الدفع">
-                      <Select value={paymentMethod || ""} onChange={(event) => setPaymentMethod(event.target.value)}>
-                        <option value="">اختر طريقة الدفع</option>
-                        {methods.includes("PAY_AT_STORE") && <option value="PAY_AT_STORE">الدفع في المحل</option>}
-                        {methods.includes("ONLINE") && <option value="ONLINE">الدفع الإلكتروني</option>}
-                      </Select>
+                      {methods.length === 1 ? (
+                        <Input value={paymentMethodLabel || (methods[0] === "ONLINE" ? "الدفع الإلكتروني" : "الدفع في المحل")} readOnly />
+                      ) : (
+                        <Select value={paymentMethod || ""} onChange={(event) => setPaymentMethod(event.target.value)}>
+                          <option value="" disabled>اختر طريقة الدفع</option>
+                          {methods.includes("PAY_AT_STORE") && <option value="PAY_AT_STORE">الدفع في المحل</option>}
+                          {methods.includes("ONLINE") && <option value="ONLINE">الدفع الإلكتروني</option>}
+                        </Select>
+                      )}
                     </Field>
                   )}
                   {Number(service.price || 0) === 0 && <div className="booking-free-note">هذه الخدمة مجانية</div>}

@@ -16,6 +16,11 @@ export function createApp() {
   app.use(cors({ origin: env.clientUrl, credentials: true }));
   app.use(rateLimit({ name: "api", windowMs: 60 * 1000, max: 240 }));
 app.use("/auth/login", rateLimit({ name: "login", windowMs: 15 * 60 * 1000, max: 10 }));
+app.use("/auth/forgot-password", rateLimit({ name: "forgot-password", windowMs: 15 * 60 * 1000, max: 5 }));
+app.use("/auth/reset-password", rateLimit({ name: "reset-password", windowMs: 15 * 60 * 1000, max: 8 }));
+app.use("/api/auth/login", rateLimit({ name: "api-login", windowMs: 15 * 60 * 1000, max: 10 }));
+app.use("/api/auth/forgot-password", rateLimit({ name: "api-forgot-password", windowMs: 15 * 60 * 1000, max: 5 }));
+app.use("/api/auth/reset-password", rateLimit({ name: "api-reset-password", windowMs: 15 * 60 * 1000, max: 8 }));
 app.use("/public", rateLimit({ name: "public", windowMs: 60 * 1000, max: 80 }));
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
