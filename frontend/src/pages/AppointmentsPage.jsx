@@ -47,16 +47,20 @@ export default function AppointmentsPage({ mode = "bookings" }) {
   const [lateMinutes, setLateMinutes] = useState(10);
   const [lateSaving, setLateSaving] = useState(false);
 
-  const load = useCallback(() => {
+  const load = useCallback((silent = false) => {
     const params = { ...rangeFor(range) };
     if (employeeId) params.employeeId = employeeId;
     if (paymentStatus) params.paymentStatus = paymentStatus;
-    setAppointments(null);
+    if (!silent) setAppointments(null);
     api.listAppointments(params).then((r) => setAppointments(r.appointments));
   }, [api, range, employeeId, paymentStatus]);
 
   useEffect(() => { api.listEmployees().then((r) => setEmployees(r.employees)); }, [api]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load(false);
+    const timer = setInterval(() => load(true), 5000);
+    return () => clearInterval(timer);
+  }, [load]);
 
   const visibleAppointments = appointments ? filterByMode(appointments, mode) : null;
   const pageTitle = mode === "rejected" ? "الحجوزات التي تم رفضها" : "الحجوزات";

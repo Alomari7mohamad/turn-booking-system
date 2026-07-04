@@ -24,6 +24,7 @@ const NAV = {
       icon: "□",
       labelKey: "navAppointments",
       children: [
+        { to: "/dashboard/appointments", labelKey: "navAppointments", end: true },
         { to: "/dashboard/appointments/manage", labelKey: "navAppointmentsManagement" },
         { to: "/dashboard/appointments/rejected", labelKey: "navRejectedAppointments" },
       ],
@@ -256,15 +257,22 @@ export function DashboardLayout() {
             const submenuOpen = link.children?.length && location.pathname.startsWith(link.to);
             return (
               <div key={link.to} className={submenuOpen ? "nav-group open" : "nav-group"}>
-                <NavLink
-                  to={link.to}
-                  end={link.end}
-                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-                  onClick={() => setOpen(false)}
-                >
-                  <span className="nav-ico">{link.icon}</span>
-                  {t(link.labelKey)}
-                </NavLink>
+                {link.children?.length ? (
+                  <button type="button" className={`nav-link nav-link-group-title ${submenuOpen ? "active" : ""}`}>
+                    <span className="nav-ico">{link.icon}</span>
+                    {t(link.labelKey)}
+                  </button>
+                ) : (
+                  <NavLink
+                    to={link.to}
+                    end={link.end}
+                    className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                    onClick={() => setOpen(false)}
+                  >
+                    <span className="nav-ico">{link.icon}</span>
+                    {t(link.labelKey)}
+                  </NavLink>
+                )}
                 {submenuOpen && (
                   <div className="nav-submenu">
                     {link.children.map((child) => (

@@ -38,6 +38,7 @@ export default function BusinessSettings() {
   const [form, setForm] = useState(null);
   const [slug, setSlug] = useState("");
   const [saving, setSaving] = useState(false);
+  const [copiedBookingUrl, setCopiedBookingUrl] = useState(false);
 
   useEffect(() => {
     api.me().then((r) => {
@@ -87,6 +88,8 @@ export default function BusinessSettings() {
   const copyBookingUrl = async () => {
     try {
       await navigator.clipboard.writeText(bookingUrl);
+      setCopiedBookingUrl(true);
+      setTimeout(() => setCopiedBookingUrl(false), 3000);
       toast.success("تم نسخ رابط الحجز");
     } catch {
       toast.error("تعذر نسخ الرابط");
@@ -113,6 +116,7 @@ export default function BusinessSettings() {
                   <Input value={bookingUrl} readOnly onFocus={(event) => event.target.select()} />
                   <Button type="button" variant="secondary" onClick={copyBookingUrl}>نسخ</Button>
                 </div>
+                {copiedBookingUrl && <div className="copy-inline-message">تم نسخ رابط الحجز</div>}
               </Field>
               <div className="grid grid-2">
                 <Field label="البريد الإلكتروني"><Input type="email" value={form.email} onChange={set("email")} /></Field>

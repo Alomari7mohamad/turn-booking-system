@@ -175,16 +175,20 @@ export default function SecretaryPage() {
   });
   const [opening, setOpening] = useState(false);
 
-  const load = useCallback(() => {
+  const load = useCallback((silent = false) => {
     if (!actor) return;
-    setData(null);
+    if (!silent) setData(null);
     api.secretaryToday(employeeId ? { employeeId } : {}).then(setData).catch((err) => {
       toast.error(err.message);
       setData({ employees: [], appointments: [], business: null });
     });
   }, [actor, api, employeeId, toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load(false);
+    const timer = setInterval(() => load(true), 5000);
+    return () => clearInterval(timer);
+  }, [load]);
 
   const openSession = async (event) => {
     event.preventDefault();

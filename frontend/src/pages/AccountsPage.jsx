@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBusinessManage } from "../context/BusinessManageContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -147,7 +147,7 @@ export default function AccountsPage() {
   const [invoice, setInvoice] = useState(null);
   const [paymentFilter, setPaymentFilter] = useState("unpaid");
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api.listAppointments()
       .then((res) => setAppointments(res.appointments || []))
       .catch((err) => {
@@ -155,6 +155,12 @@ export default function AccountsPage() {
         setAppointments([]);
       });
   }, [api, toast]);
+
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
+  }, [load]);
 
   const rows = useMemo(() => (appointments || []).filter((item) => amountOf(item) >= 0), [appointments]);
   const filteredRows = rows.filter((item) => {

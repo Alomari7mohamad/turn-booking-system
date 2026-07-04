@@ -12,10 +12,25 @@ export default function BusinessDashboard() {
   const { t } = useLanguage();
   const { api, basePath, business, isAdminManaging } = useBusinessManage();
   const [data, setData] = useState(null);
+  const [copied, setCopied] = useState("");
 
   const load = () => api.dashboard().then(setData).catch(() => setData({ stats: {}, upcoming: [] }));
 
-  useEffect(() => { load(); }, [api]);
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
+  }, [api]);
+
+  const copyLink = async (url, key = "booking") => {
+    try {
+      await navigator.clipboard?.writeText(url);
+      setCopied(key);
+      setTimeout(() => setCopied((current) => (current === key ? "" : current)), 3000);
+    } catch {
+      toast.error("تعذر نسخ الرابط");
+    }
+  };
 
   const changeStatus = async (id, status) => {
     try {
@@ -60,10 +75,11 @@ export default function BusinessDashboard() {
             </div>
             <div className="row">
               <code style={{ background: "#fff", padding: "8px 12px", borderRadius: 8, fontSize: 13 }}>/book/{currentBusiness.slug}</code>
-              <button className="btn btn-primary btn-sm" onClick={() => { navigator.clipboard?.writeText(bookingUrl); }}>{t("copy")}</button>
+              <button className="btn btn-primary btn-sm" onClick={() => copyLink(bookingUrl, "booking")}>{t("copy")}</button>
               <a className="btn btn-ghost btn-sm" href={bookingUrl} target="_blank" rel="noreferrer">{t("open")}</a>
             </div>
           </div>
+          {copied === "booking" && <div className="copy-inline-message">تم نسخ رابط الحجز</div>}
           {printUrl && (
             <div className="row-between wrap" style={{ gap: 14, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--primary-soft-2)" }}>
               <div>
@@ -72,11 +88,12 @@ export default function BusinessDashboard() {
               </div>
               <div className="row">
                 <code style={{ background: "#fff", padding: "8px 12px", borderRadius: 8, fontSize: 13 }}>/print/{currentBusiness.slug}</code>
-                <button className="btn btn-primary btn-sm" onClick={() => { navigator.clipboard?.writeText(printUrl); }}>{t("copy")}</button>
+                <button className="btn btn-primary btn-sm" onClick={() => copyLink(printUrl, "print")}>{t("copy")}</button>
                 <a className="btn btn-ghost btn-sm" href={printUrl} target="_blank" rel="noreferrer">{t("open")}</a>
               </div>
             </div>
           )}
+          {copied === "print" && <div className="copy-inline-message">تم نسخ رابط شاشة الطباعة</div>}
         </div>
       )}
 

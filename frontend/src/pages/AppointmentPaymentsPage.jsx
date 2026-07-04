@@ -33,13 +33,13 @@ export default function AppointmentPaymentsPage() {
   const [filters, setFilters] = useState({ ...todayRange(), employeeId: "", paymentStatus: "" });
   const [savingId, setSavingId] = useState(null);
 
-  const load = useCallback(() => {
+  const load = useCallback((silent = false) => {
     const params = {};
     if (filters.from) params.from = filters.from;
     if (filters.to) params.to = filters.to;
     if (filters.employeeId) params.employeeId = filters.employeeId;
     if (filters.paymentStatus) params.paymentStatus = filters.paymentStatus;
-    setAppointments(null);
+    if (!silent) setAppointments(null);
     api.listAppointments(params).then((res) => setAppointments(res.appointments || [])).catch((err) => {
       toast.error(err.message);
       setAppointments([]);
@@ -51,7 +51,9 @@ export default function AppointmentPaymentsPage() {
   }, [api]);
 
   useEffect(() => {
-    load();
+    load(false);
+    const timer = setInterval(() => load(true), 5000);
+    return () => clearInterval(timer);
   }, [load]);
 
   const changePayment = async (appointment, nextStatus) => {
@@ -79,9 +81,11 @@ export default function AppointmentPaymentsPage() {
       </div>
 
       <div className="card card-pad" style={{ marginBottom: 18 }}>
-        <div className="row wrap appointments-filters" style={{ gap: 10 }}>
-          <Input type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} />
-          <Input type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} />
+        <div className="row wrap appointments-filters payment-filters" style={{ gap: 10 }}>
+          <div className="payment-date-inputs">
+            <Input type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} />
+            <Input type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} />
+          </div>
           <div className="appointments-filter-select" style={{ minWidth: 180 }}>
             <Select value={filters.employeeId} onChange={(event) => setFilters((current) => ({ ...current, employeeId: event.target.value }))}>
               <option value="">كل العاملين</option>
