@@ -93,6 +93,7 @@ export default function App() {
             <Route path="appointments/payments" element={<AppointmentPaymentsPage />} />
             <Route path="appointments/manage" element={<BookingManagementPage />} />
             <Route path="appointments/rejected" element={<AppointmentsPage mode="rejected" />} />
+            <Route path="appointments/archive" element={<AppointmentsPage mode="archive" />} />
             <Route path="services" element={<ServicesManagement />} />
             <Route path="employees" element={<EmployeesManagement />} />
             <Route path="working-hours" element={<WorkingHoursSettings />} />
@@ -120,6 +121,7 @@ export default function App() {
           <Route path="/dashboard/appointments/payments" element={<Navigate to="/dashboard/accounts/payments" replace />} />
           <Route path="/dashboard/appointments/manage" element={<BookingManagementPage />} />
           <Route path="/dashboard/appointments/rejected" element={<AppointmentsPage mode="rejected" />} />
+          <Route path="/dashboard/appointments/archive" element={<AppointmentsPage mode="archive" />} />
           <Route path="/dashboard/services" element={<ServicesManagement />} />
           <Route path="/dashboard/employees" element={<EmployeesManagement />} />
           <Route path="/dashboard/working-hours" element={<WorkingHoursSettings />} />

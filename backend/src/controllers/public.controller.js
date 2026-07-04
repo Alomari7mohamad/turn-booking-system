@@ -170,7 +170,7 @@ async function assertPhoneVerification({ businessId, phone, token }) {
 export const getPublicBusiness = asyncHandler(async (req, res) => {
   const business = await resolveBusinessBySlug(req.params.slug);
 
-  const [services, employees] = await Promise.all([
+  const [services, employees, reviews] = await Promise.all([
     prisma.service.findMany({
       where: { businessId: business.id, isActive: true },
       select: { id: true, name: true, description: true, imageUrl: true, durationMinutes: true, price: true },
@@ -181,7 +181,23 @@ export const getPublicBusiness = asyncHandler(async (req, res) => {
       select: { id: true, name: true, title: true, services: { select: { serviceId: true } } },
       orderBy: { name: "asc" },
     }),
+    prisma.review.findMany({
+      where: { businessId: business.id },
+      select: { businessRating: true, employeeRating: true, employeeId: true },
+    }),
   ]);
+  const avg = (values) => {
+    const nums = values.map(Number).filter(Number.isFinite);
+    if (!nums.length) return null;
+    return Math.round((nums.reduce((sum, value) => sum + value, 0) / nums.length) * 10) / 10;
+  };
+  const businessRating = avg(reviews.map((review) => review.businessRating));
+  const employeeRatings = new Map();
+  reviews.forEach((review) => {
+    const list = employeeRatings.get(review.employeeId) || [];
+    list.push(review.employeeRating);
+    employeeRatings.set(review.employeeId, list);
+  });
 
   res.json({
     success: true,
@@ -200,6 +216,8 @@ export const getPublicBusiness = asyncHandler(async (req, res) => {
       requiresAppointmentApproval: business.requiresAppointmentApproval,
       printScreenEnabled: business.printScreenEnabled,
       reviewsEnabled: business.reviewsEnabled,
+      averageRating: businessRating,
+      reviewsCount: reviews.length,
     },
     services,
     employees: employees.map((e) => ({
@@ -207,6 +225,8 @@ export const getPublicBusiness = asyncHandler(async (req, res) => {
       name: e.name,
       title: e.title,
       serviceIds: e.services.map((s) => s.serviceId),
+      averageRating: avg(employeeRatings.get(e.id) || []),
+      reviewsCount: (employeeRatings.get(e.id) || []).length,
     })),
   });
 });
@@ -338,16 +358,19 @@ export const createPublicAppointment = asyncHandler(async (req, res) => {
     paymentStatus: appointment.paymentStatus,
     paymentAmount: appointment.paymentAmount,
   };
+  const appointmentMessage = appointment.status === "PENDING"
+    ? "تم إرسال طلبك بنجاح، وهو الآن قيد الانتظار حتى تتم مراجعته من المحل"
+    : "تم تأكيد الحجز بنجاح";
 
   // ״§„״¯״¹ ״§„״¥„ƒ״×״±ˆ†: ††״´״¦ ״¬„״³״© ״¯״¹ ˆ†״¹״¯ ״±״§״¨״· ״§„״¨ˆ״§״¨״© „״×ˆ״¬‡ ״§„״²״¨ˆ†.
-  if (paymentMethod === "ONLINE") {
+  if (paymentMethod === "ONLINE" && appointment.status !== "PENDING") {
     const { paymentUrl } = await initiateOnlinePayment(appointment);
     return res.status(201).json({
       success: true,
       requiresPayment: true,
       paymentUrl,
       reference: paymentReference,
-      message: "״±״¬‰ ״¥״×…״§… ״§„״¯״¹ „״×״£ƒ״¯ ״§„״­״¬״²",
+      message: appointmentMessage,
       appointment: base,
     });
   }
@@ -356,7 +379,7 @@ export const createPublicAppointment = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     requiresPayment: false,
-    message: "״×… ״×״£ƒ״¯ ״§„״­״¬״² ״¨†״¬״§״­",
+    message: appointmentMessage,
     appointment: base,
   });
 });

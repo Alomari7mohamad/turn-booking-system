@@ -235,6 +235,54 @@ export const listCustomerReviews = asyncHandler(async (req, res) => {
   res.json({ success: true, reviews });
 });
 
+export const getCustomerDetails = asyncHandler(async (req, res) => {
+  const phone = normalizeCustomerPhone(req.params.phone);
+  if (phone.length < 6) throw ApiError.badRequest("رقم الهاتف غير صالح");
+
+  const from = req.query.from ? new Date(`${req.query.from}T00:00:00`) : null;
+  const to = req.query.to ? new Date(`${req.query.to}T23:59:59.999`) : null;
+  const startAt = {};
+  if (from && !Number.isNaN(from.getTime())) startAt.gte = from;
+  if (to && !Number.isNaN(to.getTime())) startAt.lte = to;
+
+  const customer = await prisma.customer.findUnique({
+    where: { businessId_phone: { businessId: req.tenantId, phone } },
+  });
+
+  const rows = await prisma.appointment.findMany({
+    where: {
+      businessId: req.tenantId,
+      ...(Object.keys(startAt).length ? { startAt } : {}),
+    },
+    orderBy: { startAt: "desc" },
+    include: {
+      service: { select: { id: true, name: true, price: true, durationMinutes: true } },
+      employee: { select: { id: true, name: true, title: true } },
+      review: { select: { id: true, serviceRating: true, employeeRating: true, businessRating: true, comment: true, createdAt: true } },
+    },
+  });
+
+  const appointments = rows.filter((appointment) => normalizeCustomerPhone(appointment.customerPhone) === phone);
+  const paidAppointments = appointments.filter(
+    (appointment) =>
+      appointment.paymentStatus === "PAID" &&
+      !(appointment.status === "NO_SHOW" && appointment.paymentMethod === "ONLINE")
+  );
+
+  res.json({
+    success: true,
+    customer,
+    appointments,
+    summary: {
+      appointments: appointments.length,
+      paid: paidAppointments.reduce((sum, appointment) => sum + Number(appointment.paymentAmount || appointment.service?.price || 0), 0),
+      noShow: appointments.filter((appointment) => appointment.status === "NO_SHOW").length,
+      cancelled: appointments.filter((appointment) => appointment.status === "CANCELLED").length,
+      completed: appointments.filter((appointment) => appointment.status === "COMPLETED").length,
+    },
+  });
+});
+
 // ============ ״§„…ˆ״¸ˆ† ============
 // GET /api/business/employees
 export const listEmployees = asyncHandler(async (req, res) => {
@@ -649,7 +697,7 @@ export const deleteBlockedTime = asyncHandler(async (req, res) => {
 // ============ ״§„״­״¬ˆ״²״§״× ============
 // GET /api/business/appointments?from=YYYY-MM-DD&to=YYYY-MM-DD&employeeId=&status=
 export const listAppointments = asyncHandler(async (req, res) => {
-  const { from, to, employeeId, status, paymentStatus } = req.query;
+  const { from, to, employeeId, status, paymentStatus, includeArchived } = req.query;
   const where = { businessId: req.tenantId };
 
   if (from || to) {
@@ -659,6 +707,7 @@ export const listAppointments = asyncHandler(async (req, res) => {
   }
   if (employeeId) where.employeeId = Number(employeeId);
   if (status) where.status = status;
+  else if (includeArchived !== "true") where.status = { not: "ARCHIVED" };
   if (paymentStatus) where.paymentStatus = paymentStatus;
 
   const appointments = await prisma.appointment.findMany({
@@ -703,6 +752,17 @@ export const updateAppointment = asyncHandler(async (req, res) => {
     });
     data.startAt = start;
     data.endAt = end;
+  }
+
+  if (data.status === "CONFIRMED" && existing.paymentAmount == null) {
+    const serviceForConfirmation = await prisma.service.findUnique({
+      where: { id: existing.serviceId },
+      select: { price: true },
+    });
+    if (serviceForConfirmation) {
+      data.paymentAmount = serviceForConfirmation.price;
+      data.paymentStatus = "PENDING";
+    }
   }
 
   let appointment = await prisma.appointment.update({ where: { id }, data });
@@ -751,7 +811,9 @@ export const createAppointmentReviewLink = asyncHandler(async (req, res) => {
   });
   if (!appointment) throw ApiError.notFound("الحجز غير موجود");
   if (!appointment.business.reviewsEnabled) throw ApiError.badRequest("نظام التقييمات غير مفعّل لهذا المحل");
-  if (appointment.status !== "COMPLETED") throw ApiError.badRequest("يمكن إرسال رابط التقييم بعد اكتمال الحجز فقط");
+  if (appointment.status !== "COMPLETED" && new Date(appointment.endAt) > new Date()) {
+    throw ApiError.badRequest("يمكن إرسال رابط التقييم بعد انتهاء وقت الحجز");
+  }
   if (appointment.review) throw ApiError.badRequest("تم تقييم هذا الحجز مسبقًا");
 
   const reviewToken = await ensureAppointmentReviewToken(prisma, appointment.id);

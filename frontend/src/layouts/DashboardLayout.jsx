@@ -27,6 +27,7 @@ const NAV = {
         { to: "/dashboard/appointments", labelKey: "navAppointments", end: true },
         { to: "/dashboard/appointments/manage", labelKey: "navAppointmentsManagement" },
         { to: "/dashboard/appointments/rejected", labelKey: "navRejectedAppointments" },
+        { to: "/dashboard/appointments/archive", labelKey: "navArchive" },
       ],
     },
     { to: "/dashboard/services", icon: "services", labelKey: "navServices" },

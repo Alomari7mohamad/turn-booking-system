@@ -108,6 +108,7 @@ export const STATUS_META = {
   COMPLETED: { label: "مكتمل", tone: "success" },
   CANCELLED: { label: "مرفوض", tone: "danger" },
   NO_SHOW: { label: "لم يحضر", tone: "muted" },
+  ARCHIVED: { label: "مؤرشف", tone: "muted" },
 };
 
 export const PAYMENT_STATUS_META = {

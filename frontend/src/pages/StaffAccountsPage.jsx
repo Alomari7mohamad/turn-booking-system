@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { staffApi } from "../api/endpoints.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -9,16 +9,23 @@ function amountOf(appointment) {
   return Number(appointment.paymentAmount ?? appointment.service?.price ?? 0);
 }
 
-function isToday(appointment) {
-  return new Date(appointment.startAt).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
-}
-
 function isPaid(appointment) {
   return appointment.paymentStatus === "PAID" || amountOf(appointment) === 0;
 }
 
 function needsRefund(appointment) {
   return appointment.status === "NO_SHOW" && appointment.paymentMethod === "ONLINE" && appointment.paymentStatus === "PAID";
+}
+
+function localDateInput(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isToday(appointment) {
+  return localDateInput(new Date(appointment.startAt)) === localDateInput();
 }
 
 function paymentLabel(appointment) {
@@ -35,19 +42,23 @@ export default function StaffAccountsPage() {
   const [invoice, setInvoice] = useState(null);
   const [paymentFilter, setPaymentFilter] = useState("unpaid");
 
-  const todayParams = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    return { from: today, to: today };
-  };
+  const accountsParams = () => ({});
 
-  const refresh = () => staffApi.appointments(todayParams()).then(setData);
+  const refresh = useCallback((silent = false) => {
+    if (!silent) setData((current) => current);
+    return staffApi.appointments(accountsParams()).then(setData);
+  }, []);
 
   useEffect(() => {
     refresh().catch((err) => {
       toast.error(err.message);
       setData({ appointments: [] });
     });
-  }, [toast]);
+    const timer = setInterval(() => {
+      refresh(true).catch(() => {});
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [refresh, toast]);
 
   if (user?.staffRole !== "SECRETARY") return <Navigate to="/staff" replace />;
   if (!data) return <Spinner page />;

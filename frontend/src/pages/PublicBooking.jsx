@@ -68,6 +68,17 @@ function validLocalPhone(value) {
   return /^05\d{8}$/.test(String(value || ""));
 }
 
+function RatingLine({ value, count, compact = false }) {
+  if (!value) return null;
+  return (
+    <div className={compact ? "booking-rating-line compact" : "booking-rating-line"}>
+      <span aria-hidden="true">★★★★★</span>
+      <strong>{value}</strong>
+      {count ? <small>({count} تقييم)</small> : null}
+    </div>
+  );
+}
+
 export default function PublicBooking() {
   const { slug } = useParams();
   const [data, setData] = useState(null);
@@ -426,6 +437,7 @@ export default function PublicBooking() {
             </div>
           )}
           <h1>أهلاً بك في {business.name}</h1>
+          <RatingLine value={business.averageRating} count={business.reviewsCount} />
           <p>احجز دورك بسهولة وسرعة<br />في أي وقت ومن أي مكان</p>
           <div className="booking-login-form">
             <Field label="رقم الهاتف">
@@ -469,6 +481,7 @@ export default function PublicBooking() {
           <div>
             <span>أهلاً، {session.name || "ضيفنا"}</span>
             <strong>{business.name}</strong>
+            <RatingLine value={business.averageRating} count={business.reviewsCount} compact />
           </div>
           <img src={business.logoUrl || "/oh-tech-logo.jpg"} alt={business.name} />
         </header>
@@ -546,7 +559,12 @@ export default function PublicBooking() {
                 </button>
                 {serviceEmployees.map((item) => (
                   <button key={item.id} className={`booking-employee-card ${employee?.id === item.id ? "selected" : ""}`} onClick={() => chooseEmployee(item)}>
-                    <div><strong>{item.name}</strong><span>{item.title || "مقدم خدمة"}</span></div><i />
+                    <div>
+                      <strong>{item.name}</strong>
+                      <span>{item.title || "مقدم خدمة"}</span>
+                      <RatingLine value={item.averageRating} count={item.reviewsCount} compact />
+                    </div>
+                    <i />
                   </button>
                 ))}
               </>
@@ -675,20 +693,22 @@ function AppointmentCard({ appointment, onCancel, canceling }) {
 }
 
 function SuccessView({ appointment, business, onCalendar, onShare, onHome }) {
+  const isPending = appointment.status === "PENDING";
   return (
     <div className="booking-success">
-      <div className="booking-success-check">✓</div>
-      <h2>تم حجز موعدك بنجاح!</h2>
-      <p>نتطلع لرؤيتك قريبًا</p>
+      <div className="booking-success-check">{isPending ? "…" : "✓"}</div>
+      <h2>{isPending ? "طلبك قيد الانتظار" : "تم حجز موعدك بنجاح!"}</h2>
+      <p>{isPending ? "سيتم إشعارك بعد قبول أو رفض الطلب من المحل" : "نتطلع لرؤيتك قريبًا"}</p>
       <div className="booking-success-card">
         <Row label="الخدمة" value={appointment.service} />
         <Row label="العامل" value={appointment.employee} />
         <Row label="التاريخ" value={fmtDate(appointment.startAt)} />
         <Row label="الوقت" value={fmtTime(appointment.startAt)} />
         <Row label="رقم الحجز" value={`#${appointment.id}`} />
+        <Row label="الحالة" value={isPending ? "قيد الانتظار" : "مؤكد"} />
       </div>
-      <Button size="lg" block onClick={onCalendar}>إضافة إلى التقويم</Button>
-      <Button size="lg" block variant="secondary" onClick={onShare}>مشاركة الموعد</Button>
+      {!isPending && <Button size="lg" block onClick={onCalendar}>إضافة إلى التقويم</Button>}
+      <Button size="lg" block variant="secondary" onClick={onShare}>{isPending ? "مشاركة الطلب" : "مشاركة الموعد"}</Button>
       <button className="booking-home-link" onClick={onHome}>العودة للرئيسية في {business.name}</button>
     </div>
   );

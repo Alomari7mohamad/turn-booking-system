@@ -9,6 +9,7 @@ import {
   listCustomers,
   updateCustomerSettings,
   listCustomerReviews,
+  getCustomerDetails,
   listEmployees,
   createEmployee,
   updateEmployee,
@@ -51,6 +52,7 @@ router.patch("/me", updateMyBusiness);
 router.get("/dashboard", getDashboard);
 router.get("/customers", listCustomers);
 router.patch("/customers/settings", updateCustomerSettings);
+router.get("/customers/:phone/details", getCustomerDetails);
 router.get("/customers/:phone/reviews", listCustomerReviews);
 
 router.get("/employees", listEmployees);

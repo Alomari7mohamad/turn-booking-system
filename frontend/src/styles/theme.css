@@ -1,8 +1,8 @@
-/* =================================================================
-   نظام التصميم (Design System) — RTL أولًا، مستوحى من أنظمة SaaS
+﻿/* =================================================================
+   †״¸״§… ״§„״×״µ…… (Design System) ג€” RTL ״£ˆ„‹״§״ …״³״×ˆ״­‰ …† ״£†״¸…״© SaaS
    ================================================================= */
 :root {
-  /* الألوان الأساسية */
+  /* ״§„״£„ˆ״§† ״§„״£״³״§״³״© */
   --primary: #064e3b;
   --primary-hover: #022c22;
   --primary-soft: #dcfce7;
@@ -18,7 +18,7 @@
   --info: #0ea5e9;
   --info-soft: #e0f2fe;
 
-  /* محايدات */
+  /* …״­״§״¯״§״× */
   --bg: #f5f6fb;
   --surface: #ffffff;
   --surface-2: #fafbff;
@@ -29,7 +29,7 @@
   --text-muted: #64748b;
   --text-soft: #94a3b8;
 
-  /* تأثيرات */
+  /* ״×״£״«״±״§״× */
   --radius: 14px;
   --radius-sm: 10px;
   --radius-lg: 20px;
@@ -173,7 +173,7 @@ canvas {
   max-width: 100%;
 }
 
-/* ===================== أدوات عامة ===================== */
+/* ===================== ״£״¯ˆ״§״× ״¹״§…״© ===================== */
 .muted {
   color: var(--text-muted);
 }
@@ -293,7 +293,7 @@ canvas {
   background: #ffe4e6;
 }
 
-/* ===================== أزرار ===================== */
+/* ===================== ״£״²״±״§״± ===================== */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1016,7 +1016,7 @@ canvas {
   white-space: nowrap;
 }
 
-/* ===================== بطاقات ===================== */
+/* ===================== ״¨״·״§‚״§״× ===================== */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1039,7 +1039,7 @@ canvas {
   font-weight: 700;
 }
 
-/* ===================== شبكات ===================== */
+/* ===================== ״´״¨ƒ״§״× ===================== */
 .grid {
   display: grid;
   gap: 18px;
@@ -1054,7 +1054,7 @@ canvas {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
-/* ===================== بطاقة إحصائية ===================== */
+/* ===================== ״¨״·״§‚״© ״¥״­״µ״§״¦״© ===================== */
 .stat {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1085,7 +1085,7 @@ canvas {
   margin-top: 4px;
 }
 
-/* ===================== جداول ===================== */
+/* ===================== ״¬״¯״§ˆ„ ===================== */
 .table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -1122,7 +1122,7 @@ tbody tr:hover {
   background: var(--surface-2);
 }
 
-/* ===================== شارات (Badges) ===================== */
+/* ===================== ״´״§״±״§״× (Badges) ===================== */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -1145,7 +1145,7 @@ tbody tr:hover {
   background: currentColor;
 }
 
-/* ===================== حقول الإدخال ===================== */
+/* ===================== ״­‚ˆ„ ״§„״¥״¯״®״§„ ===================== */
 .field {
   display: flex;
   flex-direction: column;
@@ -1509,7 +1509,7 @@ tbody tr:hover {
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: scale(0.97) translateY(8px); } }
 
-/* ===================== حالات ===================== */
+/* ===================== ״­״§„״§״× ===================== */
 .empty {
   text-align: center;
   padding: 48px 20px;
@@ -1535,7 +1535,7 @@ tbody tr:hover {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ===================== توست (Toast) ===================== */
+/* ===================== ״×ˆ״³״× (Toast) ===================== */
 .toast-stack {
   position: fixed;
   bottom: 24px;
@@ -1560,7 +1560,7 @@ tbody tr:hover {
 .toast-error { background: #b91c1c; }
 @keyframes slideup { from { opacity: 0; transform: translateY(12px); } }
 
-/* ===================== العنوان ===================== */
+/* ===================== ״§„״¹†ˆ״§† ===================== */
 .page-head {
   display: flex;
   align-items: flex-end;
@@ -1948,4 +1948,15 @@ tbody tr:hover {
 .rating-stars .filled,
 .rating-stars .half {
   color: #f59e0b;
+}
+
+.appointments-actions-cell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.appointments-actions-cell .btn {
+  white-space: nowrap;
 }

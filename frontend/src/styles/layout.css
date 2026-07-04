@@ -2329,6 +2329,33 @@
   font-weight: 700;
 }
 
+.booking-rating-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--primary);
+  font-weight: 900;
+  margin: 8px 0 4px;
+}
+.booking-rating-line span {
+  color: #f59e0b;
+  letter-spacing: 1px;
+  font-size: 14px;
+}
+.booking-rating-line small {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.booking-rating-line.compact {
+  justify-content: flex-start;
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.booking-rating-line.compact span {
+  font-size: 11px;
+}
+
 .booking-success {
   text-align: center;
   padding-top: clamp(18px, 5vw, 32px);

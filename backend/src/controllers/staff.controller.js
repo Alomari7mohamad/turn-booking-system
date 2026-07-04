@@ -1,14 +1,14 @@
-import { prisma } from "../config/db.js";
+﻿import { prisma } from "../config/db.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { assertSlotAvailable, getAvailability } from "../services/availability.service.js";
 import { ensureAppointmentReviewToken, sendAppointmentReviewLink } from "../services/review.service.js";
 import { recordCustomerPayment } from "../services/customer.service.js";
 
-// الموظف يرى مواعيده فقط: نربط حساب المستخدم (req.user) بسجل الموظف عبر userId.
+// ״§„…ˆ״¸ ״±‰ …ˆ״§״¹״¯‡ ‚״·: †״±״¨״· ״­״³״§״¨ ״§„…״³״×״®״¯… (req.user) ״¨״³״¬„ ״§„…ˆ״¸ ״¹״¨״± userId.
 async function getEmployeeForUser(userId, businessId) {
   const emp = await prisma.employee.findFirst({ where: { userId, businessId } });
-  if (!emp) throw ApiError.forbidden("لا يوجد ملف موظف مرتبط بحسابك");
+  if (!emp) throw ApiError.forbidden("„״§ ˆ״¬״¯ …„ …ˆ״¸ …״±״×״¨״· ״¨״­״³״§״¨ƒ");
   return emp;
 }
 
@@ -17,7 +17,7 @@ export const myAppointments = asyncHandler(async (req, res) => {
   const emp = await getEmployeeForUser(req.user.id, req.tenantId);
   const { from, to, employeeId, includePending } = req.query;
 
-  const where = { businessId: req.tenantId };
+  const where = { businessId: req.tenantId, status: { not: "ARCHIVED" } };
   if (emp.role !== "SECRETARY") where.employeeId = emp.id;
   if (emp.role === "SECRETARY" && employeeId) where.employeeId = Number(employeeId);
   if (from || to) {
@@ -30,6 +30,7 @@ export const myAppointments = asyncHandler(async (req, res) => {
       where.startAt = startAt;
     }
   }
+  if (req.query.status) where.status = req.query.status;
 
   const appointments = await prisma.appointment.findMany({
     where,
@@ -56,7 +57,7 @@ export const listStaffEmployees = asyncHandler(async (req, res) => {
   res.json({ success: true, employees });
 });
 
-// PATCH /api/staff/appointments/:id/status — تحديث حالة موعده فقط
+// PATCH /api/staff/appointments/:id/status ג€” ״×״­״¯״« ״­״§„״© …ˆ״¹״¯‡ ‚״·
 export const updateMyAppointmentStatus = asyncHandler(async (req, res) => {
   const emp = await getEmployeeForUser(req.user.id, req.tenantId);
   const id = Number(req.params.id);
@@ -65,15 +66,24 @@ export const updateMyAppointmentStatus = asyncHandler(async (req, res) => {
   const allowed = emp.role === "SECRETARY"
     ? ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "NO_SHOW"]
     : ["CONFIRMED", "COMPLETED", "CANCELLED", "NO_SHOW"];
-  if (!allowed.includes(status)) throw ApiError.badRequest("حالة غير صالحة");
+  if (!allowed.includes(status)) throw ApiError.badRequest("״­״§„״© ״÷״± ״µ״§„״­״©");
 
-  // العزل المزدوج: الموعد يجب أن يخص محلّه و موظفه هو نفسه
+  // ״§„״¹״²„ ״§„…״²״¯ˆ״¬: ״§„…ˆ״¹״¯ ״¬״¨ ״£† ״®״µ …״­„‘‡ ˆ …ˆ״¸‡ ‡ˆ †״³‡
   const appt = await prisma.appointment.findFirst({
     where: { id, businessId: req.tenantId, ...(emp.role === "SECRETARY" ? {} : { employeeId: emp.id }) },
   });
-  if (!appt) throw ApiError.notFound("الموعد غير موجود ضمن مواعيدك");
+  if (!appt) throw ApiError.notFound("״§„…ˆ״¹״¯ ״÷״± …ˆ״¬ˆ״¯ ״¶…† …ˆ״§״¹״¯ƒ");
 
-  let appointment = await prisma.appointment.update({ where: { id }, data: { status } });
+  const serviceForConfirmation = status === "CONFIRMED" && appt.paymentAmount == null
+    ? await prisma.service.findUnique({ where: { id: appt.serviceId }, select: { price: true } })
+    : null;
+  let appointment = await prisma.appointment.update({
+    where: { id },
+    data: {
+      status,
+      ...(serviceForConfirmation ? { paymentAmount: serviceForConfirmation.price, paymentStatus: "PENDING" } : {}),
+    },
+  });
   if (status === "COMPLETED") {
     const business = await prisma.business.findUnique({
       where: { id: req.tenantId },
@@ -97,28 +107,28 @@ export const createStaffAppointmentReviewLink = asyncHandler(async (req, res) =>
       review: { select: { id: true } },
     },
   });
-  if (!appointment) throw ApiError.notFound("الحجز غير موجود");
-  if (!appointment.business.reviewsEnabled) throw ApiError.badRequest("نظام التقييمات غير مفعّل لهذا المحل");
-  if (appointment.status !== "COMPLETED") throw ApiError.badRequest("يمكن إرسال رابط التقييم بعد اكتمال الحجز فقط");
-  if (appointment.review) throw ApiError.badRequest("تم تقييم هذا الحجز مسبقًا");
+  if (!appointment) throw ApiError.notFound("״§„״­״¬״² ״÷״± …ˆ״¬ˆ״¯");
+  if (!appointment.business.reviewsEnabled) throw ApiError.badRequest("†״¸״§… ״§„״×‚…״§״× ״÷״± …״¹‘„ „‡״°״§ ״§„…״­„");
+  if (appointment.status !== "COMPLETED" && new Date(appointment.endAt) > new Date()) {     throw ApiError.badRequest("يمكن إرسال رابط التقييم بعد انتهاء وقت الحجز");   }
+  if (appointment.review) throw ApiError.badRequest("״×… ״×‚… ‡״°״§ ״§„״­״¬״² …״³״¨‚‹״§");
   const reviewToken = await ensureAppointmentReviewToken(prisma, appointment.id);
   res.json({ success: true, token: reviewToken, path: `/review/${reviewToken}` });
 });
 
 export const updateStaffAppointmentPayment = asyncHandler(async (req, res) => {
   const emp = await getEmployeeForUser(req.user.id, req.tenantId);
-  if (emp.role !== "SECRETARY") throw ApiError.forbidden("هذه العملية متاحة للسكرتير/ة فقط");
+  if (emp.role !== "SECRETARY") throw ApiError.forbidden("‡״°‡ ״§„״¹…„״© …״×״§״­״© „„״³ƒ״±״×״±/״© ‚״·");
 
   const id = Number(req.params.id);
   const { paymentStatus } = req.body;
   if (!["PENDING", "PAID", "FAILED", "REFUNDED"].includes(paymentStatus)) {
-    throw ApiError.badRequest("حالة دفع غير صالحة");
+    throw ApiError.badRequest("״­״§„״© ״¯״¹ ״÷״± ״µ״§„״­״©");
   }
 
   const existing = await prisma.appointment.findFirst({ where: { id, businessId: req.tenantId } });
-  if (!existing) throw ApiError.notFound("الموعد غير موجود");
+  if (!existing) throw ApiError.notFound("״§„…ˆ״¹״¯ ״÷״± …ˆ״¬ˆ״¯");
   if (existing.paymentStatus === "PAID" && paymentStatus !== "PAID") {
-    throw ApiError.badRequest("لا يمكن تغيير حالة موعد مدفوع");
+    throw ApiError.badRequest("„״§ …ƒ† ״×״÷״± ״­״§„״© …ˆ״¹״¯ …״¯ˆ״¹");
   }
 
   const serviceForPayment = paymentStatus === "PAID" && existing.paymentAmount == null
@@ -146,7 +156,7 @@ function todayInput() {
 
 export const getRequeueOptions = asyncHandler(async (req, res) => {
   const emp = await getEmployeeForUser(req.user.id, req.tenantId);
-  if (emp.role !== "SECRETARY") throw ApiError.forbidden("هذه العملية متاحة للسكرتير/ة فقط");
+  if (emp.role !== "SECRETARY") throw ApiError.forbidden("‡״°‡ ״§„״¹…„״© …״×״§״­״© „„״³ƒ״±״×״±/״© ‚״·");
 
   const id = Number(req.params.id);
   const appointment = await prisma.appointment.findFirst({
@@ -156,7 +166,7 @@ export const getRequeueOptions = asyncHandler(async (req, res) => {
       employee: { select: { id: true, name: true } },
     },
   });
-  if (!appointment) throw ApiError.notFound("الموعد غير موجود");
+  if (!appointment) throw ApiError.notFound("״§„…ˆ״¹״¯ ״÷״± …ˆ״¬ˆ״¯");
 
   const date = req.query.date || todayInput();
   const [originalSlots, allSlots] = await Promise.all([
@@ -185,20 +195,20 @@ export const getRequeueOptions = asyncHandler(async (req, res) => {
 
 export const requeueAppointment = asyncHandler(async (req, res) => {
   const emp = await getEmployeeForUser(req.user.id, req.tenantId);
-  if (emp.role !== "SECRETARY") throw ApiError.forbidden("هذه العملية متاحة للسكرتير/ة فقط");
+  if (emp.role !== "SECRETARY") throw ApiError.forbidden("‡״°‡ ״§„״¹…„״© …״×״§״­״© „„״³ƒ״±״×״±/״© ‚״·");
 
   const id = Number(req.params.id);
   const employeeId = Number(req.body.employeeId);
   const start = new Date(req.body.startAt);
   if (!employeeId || Number.isNaN(start.getTime())) {
-    throw ApiError.badRequest("اختر العامل والوقت");
+    throw ApiError.badRequest("״§״®״×״± ״§„״¹״§…„ ˆ״§„ˆ‚״×");
   }
 
   const appointment = await prisma.appointment.findFirst({
     where: { id, businessId: req.tenantId },
     include: { service: { select: { durationMinutes: true } } },
   });
-  if (!appointment) throw ApiError.notFound("الموعد غير موجود");
+  if (!appointment) throw ApiError.notFound("״§„…ˆ״¹״¯ ״÷״± …ˆ״¬ˆ״¯");
 
   const end = new Date(start.getTime() + appointment.service.durationMinutes * 60000);
   await assertSlotAvailable(prisma, {
@@ -217,7 +227,7 @@ export const requeueAppointment = asyncHandler(async (req, res) => {
       startAt: start,
       endAt: end,
       status: "CONFIRMED",
-      notes: `${appointment.notes || ""}\nإعادة للدور عبر قسم السكرتارية`.trim(),
+      notes: `${appointment.notes || ""}\n״¥״¹״§״¯״© „„״¯ˆ״± ״¹״¨״± ‚״³… ״§„״³ƒ״±״×״§״±״©`.trim(),
     },
     include: {
       service: { select: { name: true, durationMinutes: true, price: true } },

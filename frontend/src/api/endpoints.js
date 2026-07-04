@@ -35,6 +35,8 @@ const createBusinessScopedApi = (prefix) => ({
   customers: (params) => api.get(`${prefix}/customers`, { params }).then((r) => r.data),
   updateCustomerSettings: (data) =>
     api.patch(`${prefix}/customers/settings`, data).then((r) => r.data),
+  customerDetails: (phone, params) =>
+    api.get(`${prefix}/customers/${encodeURIComponent(phone)}/details`, { params }).then((r) => r.data),
   customerReviews: (phone) =>
     api.get(`${prefix}/customers/${encodeURIComponent(phone)}/reviews`).then((r) => r.data),
 

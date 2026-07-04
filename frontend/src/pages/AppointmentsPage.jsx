@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+﻿import { useEffect, useState, useCallback } from "react";
 import { useBusinessManage } from "../context/BusinessManageContext.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../components/Toast.jsx";
 import { Modal } from "../components/Modal.jsx";
 import {
@@ -17,10 +18,11 @@ import {
   PAYMENT_STATUS_META,
   PAYMENT_METHOD_META,
 } from "../components/ui.jsx";
+import { buildReviewUrl, buildReviewWhatsappUrl } from "../reviewLinks.js";
 
 function rangeFor(kind) {
   const today = new Date();
-  const iso = (d) => d.toISOString().slice(0, 10);
+  const iso = (date) => date.toISOString().slice(0, 10);
   if (kind === "today") return { from: iso(today), to: iso(today) };
   if (kind === "week") {
     const end = new Date(today);
@@ -32,12 +34,14 @@ function rangeFor(kind) {
 
 function filterByMode(items, mode) {
   if (mode === "rejected") return items.filter((item) => item.status === "CANCELLED");
+  if (mode === "archive") return items.filter((item) => item.status === "ARCHIVED");
   return items.filter((item) => ["CONFIRMED", "COMPLETED"].includes(item.status));
 }
 
 export default function AppointmentsPage({ mode = "bookings" }) {
   const toast = useToast();
   const { api } = useBusinessManage();
+  const { user } = useAuth();
   const [appointments, setAppointments] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [range, setRange] = useState("today");
@@ -51,11 +55,15 @@ export default function AppointmentsPage({ mode = "bookings" }) {
     const params = { ...rangeFor(range) };
     if (employeeId) params.employeeId = employeeId;
     if (paymentStatus) params.paymentStatus = paymentStatus;
+    if (mode === "archive") {
+      params.status = "ARCHIVED";
+      params.includeArchived = "true";
+    }
     if (!silent) setAppointments(null);
-    api.listAppointments(params).then((r) => setAppointments(r.appointments));
-  }, [api, range, employeeId, paymentStatus]);
+    api.listAppointments(params).then((result) => setAppointments(result.appointments));
+  }, [api, range, employeeId, paymentStatus, mode]);
 
-  useEffect(() => { api.listEmployees().then((r) => setEmployees(r.employees)); }, [api]);
+  useEffect(() => { api.listEmployees().then((result) => setEmployees(result.employees)); }, [api]);
   useEffect(() => {
     load(false);
     const timer = setInterval(() => load(true), 5000);
@@ -63,8 +71,8 @@ export default function AppointmentsPage({ mode = "bookings" }) {
   }, [load]);
 
   const visibleAppointments = appointments ? filterByMode(appointments, mode) : null;
-  const pageTitle = mode === "rejected" ? "الحجوزات التي تم رفضها" : "الحجوزات";
-  const pageSub = mode === "rejected" ? "كل الأدوار التي رفضها صاحب المحل" : "الأدوار المؤكدة والمقبولة فقط";
+  const pageTitle = mode === "rejected" ? "الحجوزات المرفوضة" : mode === "archive" ? "الأرشيف" : "الحجوزات";
+  const pageSub = mode === "rejected" ? "كل الأدوار التي تم رفضها" : mode === "archive" ? "الحجوزات التي مر على انتهائها 7 أيام أو أكثر" : "الأدوار المؤكدة والمقبولة فقط";
 
   const changeStatus = async (id, newStatus, successMessage = "تم تحديث الحالة") => {
     try {
@@ -88,8 +96,8 @@ export default function AppointmentsPage({ mode = "bookings" }) {
     }
   };
 
-  const submitDelay = async (e) => {
-    e.preventDefault();
+  const submitDelay = async (event) => {
+    event.preventDefault();
     const minutes = Number(lateMinutes);
     if (!Number.isInteger(minutes) || minutes <= 0) {
       toast.error("اكتب وقت التأخير بالدقائق");
@@ -106,6 +114,19 @@ export default function AppointmentsPage({ mode = "bookings" }) {
       toast.error(err.message);
     } finally {
       setLateSaving(false);
+    }
+  };
+
+  const sendReviewLink = async (appointment) => {
+    try {
+      const result = await api.createReviewLink(appointment.id);
+      const url = result.url || buildReviewUrl(result.path || result.token);
+      const whatsappUrl = result.whatsapp || buildReviewWhatsappUrl(appointment.customerPhone, url, appointment.customerName);
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      toast.success("تم تجهيز رابط التقييم");
+      load(true);
+    } catch (err) {
+      toast.error(err.message);
     }
   };
 
@@ -132,13 +153,13 @@ export default function AppointmentsPage({ mode = "bookings" }) {
             ))}
           </div>
           <div className="appointments-filter-select" style={{ minWidth: 180 }}>
-            <Select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-              <option value="">كل الموظفين</option>
+            <Select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
+              <option value="">كل العاملين</option>
               {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
             </Select>
           </div>
           <div className="appointments-filter-select" style={{ minWidth: 160 }}>
-            <Select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)}>
+            <Select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)}>
               <option value="">كل حالات الدفع</option>
               {Object.entries(PAYMENT_STATUS_META).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
             </Select>
@@ -154,7 +175,7 @@ export default function AppointmentsPage({ mode = "bookings" }) {
                 <tr>
                   <th>الزبون</th>
                   <th>الخدمة</th>
-                  <th>الموظف</th>
+                  <th>العامل</th>
                   <th>الموعد</th>
                   <th>الحالة</th>
                   <th>الدفع</th>
@@ -166,6 +187,12 @@ export default function AppointmentsPage({ mode = "bookings" }) {
                   const amount = Number(appointment.paymentAmount ?? appointment.service?.price ?? 0);
                   const isFree = amount === 0;
                   const isRejected = appointment.status === "CANCELLED";
+                  const canSendReview =
+                    user?.business?.reviewsEnabled !== false &&
+                    !appointment.review &&
+                    new Date(appointment.endAt) <= new Date() &&
+                    !["CANCELLED", "NO_SHOW", "ARCHIVED"].includes(appointment.status);
+
                   return (
                     <tr key={appointment.id}>
                       <td style={{ fontWeight: 600 }}>{appointment.customerName}<div className="soft" style={{ fontSize: 12 }}>{appointment.customerPhone}</div></td>
@@ -175,27 +202,32 @@ export default function AppointmentsPage({ mode = "bookings" }) {
                       <td><Badge tone={STATUS_META[appointment.status]?.tone}>{STATUS_META[appointment.status]?.label}</Badge></td>
                       <td>
                         {isRejected ? <span className="soft">-</span> : <>
-                        <div className="soft" style={{ fontSize: 12, marginBottom: 4 }}>
-                          {isFree ? "بدون دفع" : appointment.paymentMethod ? PAYMENT_METHOD_META[appointment.paymentMethod]?.label : "-"}
-                          {!isFree && appointment.paymentAmount ? ` - ${fmtPrice(appointment.paymentAmount)}` : ""}
-                        </div>
-                        {isFree ? (
-                          <Badge tone="success">الخدمة مجانية</Badge>
-                        ) : (
-                          <Badge tone={PAYMENT_STATUS_META[appointment.paymentStatus]?.tone}>{PAYMENT_STATUS_META[appointment.paymentStatus]?.label}</Badge>
-                        )}
+                          <div className="soft" style={{ fontSize: 12, marginBottom: 4 }}>
+                            {isFree ? "بدون دفع" : appointment.paymentMethod ? PAYMENT_METHOD_META[appointment.paymentMethod]?.label : "-"}
+                            {!isFree && appointment.paymentAmount ? ` - ${fmtPrice(appointment.paymentAmount)}` : ""}
+                          </div>
+                          {isFree ? (
+                            <Badge tone="success">الخدمة مجانية</Badge>
+                          ) : (
+                            <Badge tone={PAYMENT_STATUS_META[appointment.paymentStatus]?.tone}>{PAYMENT_STATUS_META[appointment.paymentStatus]?.label}</Badge>
+                          )}
                         </>}
                       </td>
                       <td>
-                        {mode === "bookings" && (appointment.paymentStatus === "PAID" || appointment.status === "COMPLETED") ? (
-                          <Badge tone="success">الزبون حضر</Badge>
-                        ) : mode === "bookings" ? (
-                          <Select value="" onChange={(e) => handleAction(appointment, e.target.value)} style={{ width: "auto", padding: "6px 10px", fontSize: 13 }}>
-                            <option value="">اختر إجراء</option>
-                            <option value="LATE">تأخر</option>
-                            <option value="NO_SHOW">لم يحضر</option>
-                          </Select>
-                        ) : <span className="soft">-</span>}
+                        <div className="appointments-actions-cell">
+                          {mode === "bookings" && (appointment.paymentStatus === "PAID" || appointment.status === "COMPLETED") ? (
+                            <Badge tone="success">الزبون حضر</Badge>
+                          ) : mode === "bookings" ? (
+                            <Select value="" onChange={(event) => handleAction(appointment, event.target.value)} style={{ width: "auto", padding: "6px 10px", fontSize: 13 }}>
+                              <option value="">اختر إجراء</option>
+                              <option value="LATE">تأخر</option>
+                              <option value="NO_SHOW">لم يحضر</option>
+                            </Select>
+                          ) : <span className="soft">-</span>}
+                          {canSendReview && (
+                            <Button size="sm" variant="secondary" onClick={() => sendReviewLink(appointment)}>إرسال رابط التقييم</Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -204,7 +236,7 @@ export default function AppointmentsPage({ mode = "bookings" }) {
             </table>
           </div>
         ) : (
-          <EmptyState title="لا توجد حجوزات" hint="جرب تغيير الفلاتر أو النطاق الزمني" />
+          <EmptyState title="لا توجد حجوزات" hint="جرّب تغيير الفلاتر أو النطاق الزمني" />
         )}
       </div>
 
@@ -220,10 +252,15 @@ export default function AppointmentsPage({ mode = "bookings" }) {
         )) : <div className="muted">لا توجد حجوزات للطباعة</div>}
       </div>
 
-      <Modal open={!!lateTarget} onClose={() => setLateTarget(null)} title="تأخير الدور" footer={<><Button form="late-form" type="submit" loading={lateSaving}>تأكيد التأخير</Button><Button variant="ghost" onClick={() => setLateTarget(null)}>إلغاء</Button></>}>
+      <Modal
+        open={!!lateTarget}
+        onClose={() => setLateTarget(null)}
+        title="تأخير الدور"
+        footer={<><Button form="late-form" type="submit" loading={lateSaving}>تأكيد التأخير</Button><Button variant="ghost" onClick={() => setLateTarget(null)}>إلغاء</Button></>}
+      >
         <form id="late-form" onSubmit={submitDelay} className="col" style={{ gap: 14 }}>
-          <div className="soft">سيتم إضافة وقت التأخير إلى هذا الدور وكل الأدوار التالية لنفس الموظف.</div>
-          <Field label="وقت التأخير بالدقائق"><Input type="number" min="1" step="1" value={lateMinutes} onChange={(e) => setLateMinutes(e.target.value)} autoFocus /></Field>
+          <div className="soft">سيتم إضافة وقت التأخير إلى هذا الدور وكل الأدوار التالية لنفس العامل.</div>
+          <Field label="وقت التأخير بالدقائق"><Input type="number" min="1" step="1" value={lateMinutes} onChange={(event) => setLateMinutes(event.target.value)} autoFocus /></Field>
         </form>
       </Modal>
     </>
