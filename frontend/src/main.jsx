@@ -5,6 +5,7 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { ToastProvider } from "./components/Toast.jsx";
 import App from "./App.jsx";
+import "./i18n/index.js";
 import "./styles/theme.css";
 import "./styles/layout.css";
 

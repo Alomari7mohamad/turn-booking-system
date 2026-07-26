@@ -433,6 +433,12 @@ export const updateBusiness = asyncHandler(async (req, res) => {
 
   const business = await prisma.$transaction(async (tx) => {
     const updated = await tx.business.update({ where: { id }, data });
+    if (requiresAppointmentApproval !== undefined && !Boolean(requiresAppointmentApproval)) {
+      await tx.appointment.updateMany({
+        where: { businessId: id, status: "PENDING" },
+        data: { status: "CONFIRMED" },
+      });
+    }
     const owner = await tx.user.findFirst({ where: { businessId: id, role: "BUSINESS_OWNER" } });
     if (ownerName !== undefined || ownerEmail !== undefined || ownerPassword !== undefined) {
       const ownerData = {};

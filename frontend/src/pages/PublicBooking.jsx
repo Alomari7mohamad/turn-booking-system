@@ -4,11 +4,9 @@ import { publicApi } from "../api/endpoints.js";
 import { setFavicon } from "../favicon.js";
 import { AppFooter } from "../components/AppFooter.jsx";
 import { LanguageSwitcher } from "../components/GlobalControls.jsx";
-import { Button, EmptyState, Field, Input, Select, Spinner, fmtDate, fmtPrice, fmtTime } from "../components/ui.jsx";
+import { Badge, Button, EmptyState, Field, Input, Select, Spinner, fmtDate, fmtPrice, fmtTime } from "../components/ui.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
 import { applyBrandTheme, buildBrandThemeVars, resetBrandTheme } from "../brandTheme.js";
-
-const dayKeys = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-const monthNames = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 
 function dateInputFrom(date) {
   const year = date.getFullYear();
@@ -34,11 +32,11 @@ function buildWazeUrl(value) {
   return `https://waze.com/ul?q=${encodeURIComponent(raw)}&navigate=yes`;
 }
 
-function buildWhatsappUrl(value) {
+function buildWhatsappUrl(value, message) {
   const raw = String(value || "").replace(/\D/g, "");
   if (!raw) return null;
   const phone = raw.startsWith("972") ? raw : raw.startsWith("0") ? `972${raw.slice(1)}` : raw;
-  return `https://wa.me/${phone}?text=${encodeURIComponent("مرحبا , اريد مساعدة")}`;
+  return `https://wa.me/${phone}?text=${encodeURIComponent(message || "")}`;
 }
 
 function calendarDays(monthDate) {
@@ -69,18 +67,21 @@ function validLocalPhone(value) {
 }
 
 function RatingLine({ value, count, compact = false }) {
+  const { t } = useLanguage();
   if (!value) return null;
   return (
     <div className={compact ? "booking-rating-line compact" : "booking-rating-line"}>
       <span aria-hidden="true">★★★★★</span>
       <strong>{value}</strong>
-      {count ? <small>({count} تقييم)</small> : null}
+      {count ? <small>({count} {t("pb.reviewsWord")})</small> : null}
     </div>
   );
 }
 
 export default function PublicBooking() {
   const { slug } = useParams();
+  const { t, monthName } = useLanguage();
+  const dayKeys = [t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday"), t("friday"), t("saturday")];
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [phone, setPhone] = useState("");
@@ -93,6 +94,7 @@ export default function PublicBooking() {
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [session, setSession] = useState(null);
   const [appointments, setAppointments] = useState([]);
+  const [appointmentsView, setAppointmentsView] = useState("upcoming");
   const [activeTab, setActiveTab] = useState("home");
   const [step, setStep] = useState("service");
   const [service, setService] = useState(null);
@@ -110,6 +112,8 @@ export default function PublicBooking() {
   const [bookErr, setBookErr] = useState("");
   const [success, setSuccess] = useState(null);
   const [cancelingId, setCancelingId] = useState(null);
+  const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+  const [cancelError, setCancelError] = useState("");
 
   useEffect(() => {
     publicApi.business(slug).then(setData).catch((err) => setError(err.message));
@@ -132,7 +136,7 @@ export default function PublicBooking() {
   const hasLoginImage = Boolean(business?.bookingHeroImageUrl);
   const loginCardStyle = hasLoginImage ? { "--booking-card-bg": `url("${business.bookingHeroImageUrl}")` } : undefined;
   const wazeUrl = buildWazeUrl(business?.mapUrl || business?.address);
-  const whatsappUrl = buildWhatsappUrl(business?.phone);
+  const whatsappUrl = buildWhatsappUrl(business?.phone, t("pb.whatsappHelp"));
   const serviceEmployees = service ? employees.filter((item) => item.serviceIds.includes(service.id)) : [];
   const methods = useMemo(() => {
     const result = [];
@@ -140,12 +144,24 @@ export default function PublicBooking() {
     if (business?.payAtStoreEnabled) result.push("PAY_AT_STORE");
     return result;
   }, [business]);
+  const upcomingAppointments = useMemo(() => appointments
+    .filter((appointment) => ["PENDING", "CONFIRMED"].includes(appointment.status) && new Date(appointment.startAt) > new Date())
+    .sort((a, b) => new Date(a.startAt) - new Date(b.startAt)), [appointments]);
+  const previousAppointments = useMemo(() => appointments
+    .filter((appointment) => !(["PENDING", "CONFIRMED"].includes(appointment.status) && new Date(appointment.startAt) > new Date()))
+    .sort((a, b) => new Date(b.startAt) - new Date(a.startAt)), [appointments]);
+  const nextConfirmedAppointment = upcomingAppointments.find((appointment) => appointment.status === "CONFIRMED") || null;
   const filteredServices = services.filter((item) => item.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()));
-  const paymentMethodLabel = paymentMethod === "ONLINE" ? "الدفع الإلكتروني" : paymentMethod === "PAY_AT_STORE" ? "الدفع في المحل" : "";
+  const paymentMethodLabel = paymentMethod === "ONLINE" ? t("pb.payOnline") : paymentMethod === "PAY_AT_STORE" ? t("pb.payAtStore") : "";
+  const showTimeConfirm = activeTab === "new"
+    && step === "time"
+    && Boolean(selectedDate)
+    && monthStatus[selectedDate] === "available"
+    && Boolean(slot);
 
   const refreshAppointments = async (targetPhone = session?.phone) => {
     if (!targetPhone) return;
-    const res = await publicApi.findAppointmentByPhone(slug, targetPhone);
+    const res = await publicApi.findAppointmentByPhone(slug, targetPhone, true);
     setAppointments(res.appointments || []);
     if (res.customer?.name) {
       setSession((current) => current ? { ...current, name: res.customer.name } : current);
@@ -158,9 +174,35 @@ export default function PublicBooking() {
     }
   };
 
+  useEffect(() => {
+    if (!session?.phone) return undefined;
+    const refresh = () => {
+      if (!document.hidden) refreshAppointments(session.phone).catch(() => {});
+    };
+    const timer = window.setInterval(refresh, 5000);
+    return () => window.clearInterval(timer);
+  }, [session?.phone, slug]);
+
+  useEffect(() => {
+    if (!appointmentToCancel) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !cancelingId) {
+        setAppointmentToCancel(null);
+        setCancelError("");
+      }
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [appointmentToCancel, cancelingId]);
+
   const sendCode = async () => {
     if (!validLocalPhone(phone)) {
-      setLoginMessage("الرقم خاطئ");
+      setLoginMessage(t("pb.wrongNumber"));
       setCodeSent(false);
       setCode("");
       return;
@@ -179,7 +221,7 @@ export default function PublicBooking() {
         await refreshAppointments(phone);
         return;
       }
-      setLoginMessage(res.message || "تم إرسال رمز التحقق عبر واتساب");
+      setLoginMessage(res.message || t("pb.codeSent"));
       setDevCode(res.devCode || "");
       setCodeSent(true);
     } catch (err) {
@@ -191,7 +233,7 @@ export default function PublicBooking() {
 
   const verifyCode = async () => {
     if (!validLocalPhone(phone)) {
-      setLoginMessage("الرقم خاطئ");
+      setLoginMessage(t("pb.wrongNumber"));
       setCodeSent(false);
       return;
     }
@@ -280,7 +322,7 @@ export default function PublicBooking() {
     if (methods.length === 0) setPaymentMethod(null);
   }, [methods]);
 
-  if (error) return <CenterCard><EmptyState title="تعذر فتح صفحة الحجز" hint={error} /></CenterCard>;
+  if (error) return <CenterCard><EmptyState title={t("bookingPageUnavailable")} hint={error} /></CenterCard>;
   if (!data) return <Spinner page />;
 
   const resetNewBooking = () => {
@@ -319,12 +361,12 @@ export default function PublicBooking() {
   const confirmBooking = async () => {
     const name = (customerForm.name || session?.name || "").trim();
     if (!name) {
-      setBookErr("يرجى إدخال الاسم");
+      setBookErr(t("pb.enterName"));
       return;
     }
     const isFree = Number(service.price || 0) === 0;
     if (!isFree && !paymentMethod) {
-      setBookErr("يرجى اختيار طريقة الدفع");
+      setBookErr(t("pb.choosePayment"));
       return;
     }
     setBooking(true);
@@ -358,12 +400,27 @@ export default function PublicBooking() {
     }
   };
 
-  const cancelAppointment = async (appointment) => {
-    if (!window.confirm("هل أنت متأكد أنك تريد إلغاء هذا الموعد؟")) return;
-    setCancelingId(appointment.id);
+  const requestAppointmentCancellation = (appointment) => {
+    setCancelError("");
+    setAppointmentToCancel(appointment);
+  };
+
+  const closeCancellationDialog = () => {
+    if (cancelingId) return;
+    setAppointmentToCancel(null);
+    setCancelError("");
+  };
+
+  const confirmAppointmentCancellation = async () => {
+    if (!appointmentToCancel || cancelingId) return;
+    setCancelingId(appointmentToCancel.id);
+    setCancelError("");
     try {
-      await publicApi.cancelAppointment(slug, appointment.id, session.phone);
+      await publicApi.cancelAppointment(slug, appointmentToCancel.id, session.phone);
       await refreshAppointments(session.phone);
+      setAppointmentToCancel(null);
+    } catch (err) {
+      setCancelError(err.message || t("pb.cancelFailed"));
     } finally {
       setCancelingId(null);
     }
@@ -391,7 +448,7 @@ export default function PublicBooking() {
         email: customer.email || customerForm.email,
         dateOfBirth: customer.dateOfBirth || customerForm.dateOfBirth,
       }));
-      setSettingsMessage("تم حفظ التفاصيل");
+      setSettingsMessage(t("pb.detailsSaved"));
     } catch (err) {
       setSettingsMessage(err.message);
     }
@@ -421,7 +478,7 @@ export default function PublicBooking() {
 
   const shareAppointment = async () => {
     if (!success) return;
-    const text = `موعدي في ${business.name}: ${success.service} يوم ${fmtDate(success.startAt)} الساعة ${fmtTime(success.startAt)}`;
+    const text = t("pb.shareText", { business: business.name, service: success.service, date: fmtDate(success.startAt), time: fmtTime(success.startAt) });
     if (navigator.share) await navigator.share({ text });
     else await navigator.clipboard.writeText(text);
   };
@@ -436,37 +493,39 @@ export default function PublicBooking() {
               <img src={business.logoUrl || "/oh-tech-logo.jpg"} alt={business.name} />
             </div>
           )}
-          <h1>أهلاً بك في {business.name}</h1>
-          <RatingLine value={business.averageRating} count={business.reviewsCount} />
-          <p>احجز دورك بسهولة وسرعة<br />في أي وقت ومن أي مكان</p>
-          <div className="booking-login-form">
-            <Field label="رقم الهاتف">
-              <div className="phone-entry">
-                <Input
-                  value={phone}
-                  onChange={(event) => {
-                    setPhone(normalizeLocalPhoneInput(event.target.value));
-                    setLoginMessage("");
-                    setCodeSent(false);
-                    setCode("");
-                  }}
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
-                  placeholder="05XXXXXXXX"
-                />
-              </div>
-            </Field>
-            <Button size="lg" block loading={sendingCode} disabled={!phone} onClick={sendCode}>متابعة</Button>
-            {(loginMessage || devCode) && <div className="booking-login-message">{loginMessage}{devCode ? ` رمز التجربة: ${devCode}` : ""}</div>}
-            {codeSent && (
-              <>
-                <Field label="رمز التحقق">
-                  <Input value={code} onChange={(event) => setCode(event.target.value)} inputMode="numeric" placeholder="أدخل الرمز المرسل إلى واتساب" />
-                </Field>
-                <Button size="lg" block variant="secondary" loading={verifyingCode} disabled={!phone || !code} onClick={verifyCode}>تأكيد الرقم</Button>
-              </>
-            )}
+          <div className="booking-login-content">
+            <h1>{t("pb.welcomeTo", { name: business.name })}</h1>
+            <RatingLine value={business.averageRating} count={business.reviewsCount} />
+            <p>{t("pb.heroLine1")}<br />{t("pb.heroLine2")}</p>
+            <div className="booking-login-form">
+              <Field label={t("phoneNumber")}>
+                <div className="phone-entry">
+                  <Input
+                    value={phone}
+                    onChange={(event) => {
+                      setPhone(normalizeLocalPhoneInput(event.target.value));
+                      setLoginMessage("");
+                      setCodeSent(false);
+                      setCode("");
+                    }}
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="05XXXXXXXX"
+                  />
+                </div>
+              </Field>
+              <Button size="lg" block loading={sendingCode} disabled={!phone} onClick={sendCode}>{t("continue")}</Button>
+              {(loginMessage || devCode) && <div className="booking-login-message">{loginMessage}{devCode ? ` ${t("pb.devCode", { code: devCode })}` : ""}</div>}
+              {codeSent && (
+                <>
+                  <Field label={t("pb.verifyCode")}>
+                    <Input value={code} onChange={(event) => setCode(event.target.value)} inputMode="numeric" placeholder={t("pb.enterCode")} />
+                  </Field>
+                  <Button size="lg" block variant="secondary" loading={verifyingCode} disabled={!phone || !code} onClick={verifyCode}>{t("pb.confirmNumber")}</Button>
+                </>
+              )}
+            </div>
           </div>
         </div>
         <AppFooter />
@@ -479,7 +538,7 @@ export default function PublicBooking() {
       <div className="booking-app-shell">
         <header className="booking-app-header">
           <div>
-            <span>أهلاً، {session.name || "ضيفنا"}</span>
+            <span>{t("pb.greeting", { name: session.name || t("pb.guest") })}</span>
             <strong>{business.name}</strong>
             <RatingLine value={business.averageRating} count={business.reviewsCount} compact />
           </div>
@@ -489,45 +548,55 @@ export default function PublicBooking() {
         {activeTab === "home" && (
           <main className="booking-app-content">
             <section className="booking-panel">
-              <h3>موعدك القادم</h3>
-              {appointments[0] ? <AppointmentCard appointment={appointments[0]} onCancel={cancelAppointment} canceling={cancelingId === appointments[0].id} /> : <EmptyState title="لا يوجد موعد قادم" hint="احجز موعدك الأول الآن." />}
+              <h3>{t("pb.yourNextAppointment")}</h3>
+              {upcomingAppointments[0] ? <AppointmentCard appointment={upcomingAppointments[0]} isNext={upcomingAppointments[0].id === nextConfirmedAppointment?.id} onCancel={requestAppointmentCancellation} canceling={cancelingId === upcomingAppointments[0].id} /> : <EmptyState title={t("pb.noNextAppt")} hint={t("pb.bookFirstNow")} />}
             </section>
           </main>
         )}
 
         {activeTab === "appointments" && (
           <main className="booking-app-content">
-            <PageTitle title="مواعيدي" subtitle="كل المواعيد القادمة المرتبطة برقم هاتفك" />
-            {appointments.length ? appointments.map((appointment) => (
-              <AppointmentCard key={appointment.id} appointment={appointment} onCancel={cancelAppointment} canceling={cancelingId === appointment.id} />
-            )) : <EmptyState title="لا توجد مواعيد" hint="أي موعد مؤكد سيظهر هنا." />}
+            <PageTitle title={t("pb.myAppointments")} subtitle={t("pb.apptsLinkedToPhone")} />
+            <div className="booking-appointments-tabs" role="tablist" aria-label={t("pb.filterAppointments")}>
+              <button type="button" role="tab" aria-selected={appointmentsView === "upcoming"} className={appointmentsView === "upcoming" ? "active" : ""} onClick={() => setAppointmentsView("upcoming")}>
+                {t("pb.upcomingTurns")} <span>{upcomingAppointments.length}</span>
+              </button>
+              <button type="button" role="tab" aria-selected={appointmentsView === "previous"} className={appointmentsView === "previous" ? "active" : ""} onClick={() => setAppointmentsView("previous")}>
+                {t("pb.previousTurns")} <span>{previousAppointments.length}</span>
+              </button>
+            </div>
+            {(appointmentsView === "upcoming" ? upcomingAppointments : previousAppointments).length ? (appointmentsView === "upcoming" ? upcomingAppointments : previousAppointments).map((appointment) => (
+              <AppointmentCard key={appointment.id} appointment={appointment} isNext={appointment.id === nextConfirmedAppointment?.id} onCancel={requestAppointmentCancellation} canceling={cancelingId === appointment.id} />
+            )) : appointmentsView === "upcoming"
+              ? <EmptyState title={t("noUpcomingAppointments")} hint={t("pb.canBookNow")} />
+              : <EmptyState title={t("pb.noHistory")} hint={t("pb.historyHint")} />}
           </main>
         )}
 
         {activeTab === "settings" && (
           <main className="booking-app-content">
-            <PageTitle title="الإعدادات" subtitle="تفاصيلك الشخصية في صفحة الحجز" />
+            <PageTitle title={t("pb.settings")} subtitle={t("pb.settingsSub")} />
             <div className="booking-panel">
-              <Field label="الاسم">
+              <Field label={t("pb.name")}>
                 <Input value={customerForm.name} onChange={(event) => setCustomerForm((current) => ({ ...current, name: event.target.value }))} />
               </Field>
-              <Field label="رقم الهاتف">
+              <Field label={t("phoneNumber")}>
                 <Input value={session.phone} readOnly />
               </Field>
-              <Field label="البريد الإلكتروني">
+              <Field label={t("email")}>
                 <Input value={customerForm.email} onChange={(event) => setCustomerForm((current) => ({ ...current, email: event.target.value }))} />
               </Field>
-              <Field label="تاريخ الميلاد">
+              <Field label={t("pb.dateOfBirth")}>
                 <Input type="date" value={customerForm.dateOfBirth} onChange={(event) => setCustomerForm((current) => ({ ...current, dateOfBirth: event.target.value }))} />
               </Field>
               {settingsMessage && <div className="booking-login-message">{settingsMessage}</div>}
-              <Button onClick={saveCustomerSettings}>حفظ التفاصيل</Button>
+              <Button onClick={saveCustomerSettings}>{t("pb.saveDetails")}</Button>
             </div>
           </main>
         )}
 
         {activeTab === "new" && (
-          <main className="booking-app-content">
+          <main className={`booking-app-content booking-flow-content ${showTimeConfirm ? "has-floating-confirm" : ""}`}>
             {step !== "success" && <BackButton onClick={() => {
               if (step === "service") setActiveTab("home");
               if (step === "employee") setStep("service");
@@ -536,15 +605,15 @@ export default function PublicBooking() {
             }} />}
             {step === "service" && (
               <>
-                <PageTitle title="اختر الخدمة" subtitle="اختر الخدمة التي تريد حجز موعد لها" />
-                <Input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="بحث عن خدمة" />
+                <PageTitle title={t("chooseService")} subtitle={t("pb.chooseServiceSub")} />
+                <Input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder={t("pb.searchService")} />
                 <div className="booking-service-grid">
                   {filteredServices.map((item) => (
                     <button key={item.id} className="booking-service-card" onClick={() => chooseService(item)}>
                       {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <span>{serviceIcon(item.name)}</span>}
                       <strong>{item.name}</strong>
                       {item.description && <p className="booking-service-note">{item.description}</p>}
-                      <small>{item.durationMinutes} دقيقة - {Number(item.price || 0) === 0 ? "مجانية" : fmtPrice(item.price)}</small>
+                      <small>{item.durationMinutes} {t("minutes")} - {Number(item.price || 0) === 0 ? t("pb.free") : fmtPrice(item.price)}</small>
                     </button>
                   ))}
                 </div>
@@ -553,15 +622,15 @@ export default function PublicBooking() {
 
             {step === "employee" && (
               <>
-                <PageTitle title="اختر العامل" subtitle="اختر العامل الذي تفضل الحجز معه" />
+                <PageTitle title={t("chooseEmployee")} subtitle={t("pb.chooseEmployeeSub")} />
                 <button className={`booking-employee-card ${employee === null ? "selected" : ""}`} onClick={() => chooseEmployee(null)}>
-                  <div><strong>أي عامل متاح</strong><span>النظام يختار أقرب وقت مناسب</span></div><i />
+                  <div><strong>{t("anyAvailableEmployee")}</strong><span>{t("pb.systemPicks")}</span></div><i />
                 </button>
                 {serviceEmployees.map((item) => (
                   <button key={item.id} className={`booking-employee-card ${employee?.id === item.id ? "selected" : ""}`} onClick={() => chooseEmployee(item)}>
                     <div>
                       <strong>{item.name}</strong>
-                      <span>{item.title || "مقدم خدمة"}</span>
+                      <span>{item.title || t("pb.serviceProvider")}</span>
                       <RatingLine value={item.averageRating} count={item.reviewsCount} compact />
                     </div>
                     <i />
@@ -572,14 +641,14 @@ export default function PublicBooking() {
 
             {step === "time" && (
               <>
-                <PageTitle title="اختر الموعد" subtitle="اختر التاريخ واليوم والوقت المناسب لك" />
+                <PageTitle title={t("pb.chooseAppointment")} subtitle={t("pb.chooseAppointmentSub")} />
                 <div className="booking-month-head">
                   <button onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}>‹</button>
-                  <strong>{monthNames[monthDate.getMonth()]} {monthDate.getFullYear()}</strong>
+                  <strong>{monthName(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1), "long")} {monthDate.getFullYear()}</strong>
                   <button onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>›</button>
                 </div>
                 {monthLoading ? (
-                  <div className="booking-calendar-loading"><Spinner /><span>جاري فحص الأيام المتاحة...</span></div>
+                  <div className="booking-calendar-loading"><Spinner /><span>{t("pb.checkingDays")}</span></div>
                 ) : (
                   <div className="booking-calendar">
                     {dayKeys.map((day) => <span key={day}>{day}</span>)}
@@ -604,7 +673,7 @@ export default function PublicBooking() {
                     })}
                   </div>
                 )}
-                <h3 className="booking-section-title">اختر الوقت</h3>
+                <h3 className="booking-section-title">{t("pb.chooseTime")}</h3>
                 {slots === null ? <Spinner /> : slots.length ? (
                   <div className="booking-slots">
                     {slots.map((item) => (
@@ -613,37 +682,36 @@ export default function PublicBooking() {
                       </button>
                     ))}
                   </div>
-                ) : <EmptyState title="لا توجد أوقات متاحة" hint="اختر يومًا آخر أو عاملًا آخر." />}
-                <Button size="lg" block disabled={!slot} onClick={() => setStep("details")}>تأكيد الموعد</Button>
+                ) : <EmptyState title={t("pb.noTimes")} hint={t("pb.tryAnother")} />}
               </>
             )}
 
             {step === "details" && (
               <>
-                <PageTitle title="تأكيد الحجز" subtitle="أدخل تفاصيل طالب الخدمة قبل إرسال الطلب" />
+                <PageTitle title={t("pb.confirmBooking")} subtitle={t("pb.confirmBookingSub")} />
                 <div className="booking-panel">
-                  <Field label="الاسم">
+                  <Field label={t("pb.name")}>
                     <Input value={customerForm.name} onChange={(event) => setCustomerForm((current) => ({ ...current, name: event.target.value }))} required />
                   </Field>
-                  <Field label="البريد الإلكتروني (اختياري)">
+                  <Field label={t("optionalEmail")}>
                     <Input value={customerForm.email} onChange={(event) => setCustomerForm((current) => ({ ...current, email: event.target.value }))} />
                   </Field>
                   {Number(service.price || 0) > 0 && (
-                    <Field label="طريقة الدفع">
+                    <Field label={t("paymentMethod")}>
                       {methods.length === 1 ? (
-                        <Input value={paymentMethodLabel || (methods[0] === "ONLINE" ? "الدفع الإلكتروني" : "الدفع في المحل")} readOnly />
+                        <Input value={paymentMethodLabel || (methods[0] === "ONLINE" ? t("pb.payOnline") : t("pb.payAtStore"))} readOnly />
                       ) : (
                         <Select value={paymentMethod || ""} onChange={(event) => setPaymentMethod(event.target.value)}>
-                          <option value="" disabled>اختر طريقة الدفع</option>
-                          {methods.includes("PAY_AT_STORE") && <option value="PAY_AT_STORE">الدفع في المحل</option>}
-                          {methods.includes("ONLINE") && <option value="ONLINE">الدفع الإلكتروني</option>}
+                          <option value="" disabled>{t("pb.choosePaymentMethod")}</option>
+                          {methods.includes("PAY_AT_STORE") && <option value="PAY_AT_STORE">{t("pb.payAtStore")}</option>}
+                          {methods.includes("ONLINE") && <option value="ONLINE">{t("pb.payOnline")}</option>}
                         </Select>
                       )}
                     </Field>
                   )}
-                  {Number(service.price || 0) === 0 && <div className="booking-free-note">هذه الخدمة مجانية</div>}
+                  {Number(service.price || 0) === 0 && <div className="booking-free-note">{t("pb.thisServiceFree")}</div>}
                   {bookErr && <div className="error-text">{bookErr}</div>}
-                  <Button size="lg" block loading={booking} onClick={confirmBooking}>حفظ الطلب</Button>
+                  <Button className="booking-submit-button" size="lg" block loading={booking} onClick={confirmBooking}>{t("pb.saveRequest")}</Button>
                 </div>
               </>
             )}
@@ -654,14 +722,55 @@ export default function PublicBooking() {
           </main>
         )}
 
+        {showTimeConfirm && (
+          <div className="booking-floating-confirm">
+            <Button size="lg" block onClick={() => setStep("details")}>{t("pb.confirmAppointment")}</Button>
+          </div>
+        )}
+
         <nav className="booking-bottom-nav">
-          <button className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}><span className="booking-nav-icon booking-home-icon" aria-hidden="true" />الرئيسية</button>
-          <button className={activeTab === "appointments" ? "active" : ""} onClick={() => { refreshAppointments(); setActiveTab("appointments"); }}><span className="booking-nav-icon booking-queue-icon" aria-hidden="true" />مواعيدي</button>
-          <button className="book-now" onClick={resetNewBooking}><b>+</b><span>احجز الآن</span></button>
-          <a className="booking-whatsapp-nav" href={whatsappUrl || "#"} target={whatsappUrl ? "_blank" : undefined} rel="noreferrer" aria-disabled={!whatsappUrl} onClick={(event) => { if (!whatsappUrl) event.preventDefault(); }}><span className="booking-nav-icon booking-whatsapp-icon" aria-hidden="true" />واتساب</a>
-          <button className={activeTab === "settings" ? "active" : ""} onClick={() => setActiveTab("settings")}><span className="booking-nav-icon booking-settings-icon" aria-hidden="true" />الإعدادات</button>
+          <button className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}><span className="booking-nav-icon booking-home-icon" aria-hidden="true" />{t("pb.home")}</button>
+          <button
+            className={activeTab === "appointments" ? "active" : ""}
+            aria-label={nextConfirmedAppointment ? t("pb.myApptsWithNext") : t("pb.myAppointments")}
+            onClick={() => { refreshAppointments(); setAppointmentsView("upcoming"); setActiveTab("appointments"); }}
+          >
+            <span className="booking-nav-icon-wrap" aria-hidden="true">
+              <span className="booking-nav-icon booking-queue-icon" />
+              {nextConfirmedAppointment && <span className="booking-next-dot" />}
+            </span>
+            {t("pb.myAppointments")}
+          </button>
+          <button className="book-now" onClick={resetNewBooking}><b>+</b><span>{t("pb.bookNow")}</span></button>
+          <a className="booking-whatsapp-nav" href={whatsappUrl || "#"} target={whatsappUrl ? "_blank" : undefined} rel="noreferrer" aria-disabled={!whatsappUrl} onClick={(event) => { if (!whatsappUrl) event.preventDefault(); }}><span className="booking-nav-icon booking-whatsapp-icon" aria-hidden="true" />{t("pb.whatsapp")}</a>
+          <button className={activeTab === "settings" ? "active" : ""} onClick={() => setActiveTab("settings")}><span className="booking-nav-icon booking-settings-icon" aria-hidden="true" />{t("pb.settings")}</button>
         </nav>
       </div>
+      {appointmentToCancel && (
+        <div className="booking-confirm-overlay" role="presentation" onMouseDown={closeCancellationDialog}>
+          <section
+            className="booking-confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-appointment-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button className="booking-confirm-close" type="button" aria-label={t("close")} disabled={Boolean(cancelingId)} onClick={closeCancellationDialog}>×</button>
+            <div className="booking-confirm-symbol" aria-hidden="true">!</div>
+            <h2 id="cancel-appointment-title">{t("pb.confirmCancelTitle")}</h2>
+            <p>{t("pb.confirmCancelText")}</p>
+            <div className="booking-confirm-summary">
+              <strong>{appointmentToCancel.service}</strong>
+              <span>{fmtDate(appointmentToCancel.startAt)} · {fmtTime(appointmentToCancel.startAt)} - {fmtTime(appointmentToCancel.endAt)}</span>
+            </div>
+            {cancelError && <div className="booking-confirm-error">{cancelError}</div>}
+            <div className="booking-confirm-actions">
+              <Button variant="ghost" disabled={Boolean(cancelingId)} onClick={closeCancellationDialog}>{t("pb.undo")}</Button>
+              <Button variant="danger" loading={Boolean(cancelingId)} onClick={confirmAppointmentCancellation}>{t("pb.yesCancel")}</Button>
+            </div>
+          </section>
+        </div>
+      )}
       {wazeUrl && <a className="waze-floating-button" href={wazeUrl} target="_blank" rel="noreferrer" aria-label="Waze"><img src="/waze.jpg" alt="" /></a>}
     </div>
   );
@@ -676,40 +785,77 @@ function PageTitle({ title, subtitle }) {
 }
 
 function BackButton({ onClick }) {
-  return <button className="booking-back" onClick={onClick} aria-label="رجوع">←</button>;
+  const { t } = useLanguage();
+  return <button className="booking-back" onClick={onClick} aria-label={t("back")}>←</button>;
 }
 
-function AppointmentCard({ appointment, onCancel, canceling }) {
+function AppointmentCard({ appointment, isNext = false, onCancel, canceling }) {
+  const { t } = useLanguage();
   const future = new Date(appointment.startAt) > new Date();
+  const statusMeta = {
+    PENDING: { label: t("pb.statusPending"), tone: "warning" },
+    CONFIRMED: { label: t("pb.statusConfirmed"), tone: "success" },
+    COMPLETED: { label: t("pb.statusCompleted"), tone: "success" },
+    NO_SHOW: { label: t("pb.statusNoShow"), tone: "muted" },
+    REJECTED: { label: t("pb.statusRejected"), tone: "danger" },
+  }[appointment.status];
+  const canCancel = future && ["PENDING", "CONFIRMED"].includes(appointment.status);
+  const paymentLabel = appointment.paymentStatus === "PAID"
+    ? t("pb.paid")
+    : Number(appointment.paymentAmount || 0) === 0
+      ? t("pb.freeService")
+      : t("pb.awaitingPayment");
   return (
-    <article className="booking-appointment-card">
-      <strong>{appointment.service}</strong>
-      <span>{appointment.employee}</span>
-      <p>{fmtDate(appointment.startAt)} - {fmtTime(appointment.startAt)} حتى {fmtTime(appointment.endAt)}</p>
-      <small>{appointment.paymentStatus === "PAID" ? "مدفوع" : Number(appointment.paymentAmount || 0) === 0 ? "مجانية" : "بانتظار الدفع"}</small>
-      {future && <Button size="sm" variant="danger" loading={canceling} onClick={() => onCancel(appointment)}>إلغاء الموعد</Button>}
+    <article className={`booking-appointment-card is-${String(appointment.status || "").toLowerCase()}`}>
+      <header className="booking-appointment-head">
+        <div>
+          <strong className="booking-appointment-service">{appointment.service}</strong>
+          <span className="booking-appointment-employee">{t("pb.with", { name: appointment.employee })}</span>
+        </div>
+        <div className="booking-appointment-tags">
+          {isNext && <span className="booking-appointment-next">{t("pb.nearest")}</span>}
+          <span className="booking-appointment-number">#{appointment.id}</span>
+        </div>
+      </header>
+
+      <div className="booking-appointment-time">
+        <span>{fmtDate(appointment.startAt)}</span>
+        <strong>{fmtTime(appointment.startAt)} - {fmtTime(appointment.endAt)}</strong>
+      </div>
+
+      <div className="booking-appointment-meta">
+        {statusMeta && <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>}
+        {appointment.status !== "REJECTED" && <small>{paymentLabel}</small>}
+      </div>
+
+      {canCancel && (
+        <Button className="booking-cancel-button" size="sm" variant="ghost" loading={canceling} onClick={() => onCancel(appointment)}>
+          {t("pb.cancelAppointment")}
+        </Button>
+      )}
     </article>
   );
 }
 
 function SuccessView({ appointment, business, onCalendar, onShare, onHome }) {
+  const { t } = useLanguage();
   const isPending = appointment.status === "PENDING";
   return (
     <div className="booking-success">
       <div className="booking-success-check">{isPending ? "…" : "✓"}</div>
-      <h2>{isPending ? "طلبك قيد الانتظار" : "تم حجز موعدك بنجاح!"}</h2>
-      <p>{isPending ? "سيتم إشعارك بعد قبول أو رفض الطلب من المحل" : "نتطلع لرؤيتك قريبًا"}</p>
+      <h2>{isPending ? t("pb.pendingTitle") : t("pb.bookedSuccess")}</h2>
+      <p>{isPending ? t("pb.pendingSub") : t("pb.lookForward")}</p>
       <div className="booking-success-card">
-        <Row label="الخدمة" value={appointment.service} />
-        <Row label="العامل" value={appointment.employee} />
-        <Row label="التاريخ" value={fmtDate(appointment.startAt)} />
-        <Row label="الوقت" value={fmtTime(appointment.startAt)} />
-        <Row label="رقم الحجز" value={`#${appointment.id}`} />
-        <Row label="الحالة" value={isPending ? "قيد الانتظار" : "مؤكد"} />
+        <Row label={t("service")} value={appointment.service} />
+        <Row label={t("employee")} value={appointment.employee} />
+        <Row label={t("date")} value={fmtDate(appointment.startAt)} />
+        <Row label={t("pb.time")} value={fmtTime(appointment.startAt)} />
+        <Row label={t("pb.bookingNumber")} value={`#${appointment.id}`} />
+        <Row label={t("status")} value={isPending ? t("pb.waiting") : t("statusConfirmed")} />
       </div>
-      {!isPending && <Button size="lg" block onClick={onCalendar}>إضافة إلى التقويم</Button>}
-      <Button size="lg" block variant="secondary" onClick={onShare}>{isPending ? "مشاركة الطلب" : "مشاركة الموعد"}</Button>
-      <button className="booking-home-link" onClick={onHome}>العودة للرئيسية في {business.name}</button>
+      {!isPending && <Button size="lg" block onClick={onCalendar}>{t("pb.addToCalendar")}</Button>}
+      <Button size="lg" block variant="secondary" onClick={onShare}>{isPending ? t("pb.shareRequest") : t("pb.shareAppointment")}</Button>
+      <button className="booking-home-link" onClick={onHome}>{t("pb.backHomeTo", { name: business.name })}</button>
     </div>
   );
 }

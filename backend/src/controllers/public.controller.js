@@ -12,6 +12,7 @@ import { normalizeWhatsappPhone, sendWhatsappText } from "../services/whatsapp.s
 import { env } from "../config/env.js";
 import { updateCustomerProfile } from "../services/customer.service.js";
 import { ensureBusinessFeatureColumns, ensureCustomerProfileColumns } from "../services/databaseMaintenance.service.js";
+import { isAppointmentRejected } from "../utils/appointmentStatus.js";
 
 // …״®״·‘״· ״§„״×״­‚‚ …† ״¨״§†״§״× ״§„״­״¬״² ״§„״¹״§… (״±״³״§״¦„ ״¹״±״¨״© ˆ״§״¶״­״©)
 const bookingSchema = z.object({
@@ -389,6 +390,7 @@ export const findAppointmentByPhone = asyncHandler(async (req, res) => {
   const business = await resolveBusinessBySlug(req.params.slug);
   const phone = String(req.query.phone || "").trim();
   const normalizedPhone = phone.replace(/\D/g, "");
+  const includePast = req.query.includePast === "true";
 
   if (normalizedPhone.length < 6) {
     throw ApiError.badRequest("״±‚… ״§„‡״§״× ״÷״± ״µ״§„״­");
@@ -397,18 +399,23 @@ export const findAppointmentByPhone = asyncHandler(async (req, res) => {
   const appointments = await prisma.appointment.findMany({
     where: {
       businessId: business.id,
-      status: "CONFIRMED",
-      startAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+      status: { in: includePast
+        ? ["PENDING", "CONFIRMED", "COMPLETED", "NO_SHOW", "CANCELLED"]
+        : ["PENDING", "CONFIRMED", "CANCELLED"] },
+      ...(includePast ? {} : { startAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } }),
     },
     include: {
       service: { select: { name: true } },
       employee: { select: { name: true } },
     },
     orderBy: { startAt: "asc" },
-    take: 200,
+    take: includePast ? 1000 : 200,
   });
 
-  const customerAppointments = appointments.filter((item) => item.customerPhone.replace(/\D/g, "") === normalizedPhone);
+  const customerAppointments = appointments.filter((item) => (
+    item.customerPhone.replace(/\D/g, "") === normalizedPhone
+    && (item.status !== "CANCELLED" || isAppointmentRejected(item))
+  ));
   if (!customerAppointments.length) {
     return res.json({ success: true, appointment: null, appointments: [], customer: null });
   }
@@ -427,7 +434,7 @@ export const findAppointmentByPhone = asyncHandler(async (req, res) => {
     employee: appointment.employee.name,
     customerName: appointment.customerName,
     customerPhone: appointment.customerPhone,
-    status: appointment.status,
+    status: isAppointmentRejected(appointment) ? "REJECTED" : appointment.status,
     paymentMethod: appointment.paymentMethod,
     paymentStatus: appointment.paymentStatus,
     paymentAmount: appointment.paymentAmount,

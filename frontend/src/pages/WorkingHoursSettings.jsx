@@ -4,8 +4,9 @@ import { useToast } from "../components/Toast.jsx";
 import { Modal } from "../components/Modal.jsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { Button, Field, Input, Select, Spinner, EmptyState, fmtDate, fmtTime } from "../components/ui.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
-const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const DAYS = Array.from({ length: 7 });
 const DEFAULT_BLOCK_FORM = { employeeId: "", startDate: "", endDate: "", start: "00:00", end: "23:59", reason: "" };
 
 // يبني جدول 7 أيام افتراضي مدموجًا مع المحفوظ
@@ -37,6 +38,8 @@ const formatBlockedDate = (blockedTime) => (
 export default function WorkingHoursSettings() {
   const toast = useToast();
   const { api } = useBusinessManage();
+  const { t } = useLanguage();
+  const dayNames = [t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday"), t("friday"), t("saturday")];
   const [week, setWeek] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -61,7 +64,7 @@ export default function WorkingHoursSettings() {
     setSaving(true);
     try {
       await api.setWorkingHours(week);
-      toast.success("تم حفظ ساعات العمل");
+      toast.success(t("wh.saved"));
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -73,12 +76,12 @@ export default function WorkingHoursSettings() {
     e.preventDefault();
     const { startDate, endDate, start, end } = blockForm;
     const finalEndDate = endDate || startDate;
-    if (!startDate) return toast.error("اختر تاريخ البداية");
-    if (!finalEndDate) return toast.error("اختر تاريخ النهاية");
+    if (!startDate) return toast.error(t("wh.pickStart"));
+    if (!finalEndDate) return toast.error(t("wh.pickEnd"));
 
     const startAt = `${startDate}T${start}:00`;
     const endAt = `${finalEndDate}T${end}:00`;
-    if (new Date(endAt) <= new Date(startAt)) return toast.error("وقت النهاية يجب أن يكون بعد وقت البداية");
+    if (new Date(endAt) <= new Date(startAt)) return toast.error(t("wh.endAfterStart"));
 
     try {
       await api.createBlockedTime({
@@ -87,7 +90,7 @@ export default function WorkingHoursSettings() {
         endAt,
         reason: blockForm.reason,
       });
-      toast.success("تمت إضافة الإغلاق");
+      toast.success(t("wh.blockAdded"));
       setModal(false);
       setBlockForm(DEFAULT_BLOCK_FORM);
       loadBlocked();
@@ -101,7 +104,7 @@ export default function WorkingHoursSettings() {
     setConfirmDel(null);
     try {
       await api.deleteBlockedTime(id);
-      toast.success("تم حذف الإغلاق");
+      toast.success(t("wh.blockDeleted"));
       loadBlocked();
     } catch (err) {
       toast.error(err.message);
@@ -114,36 +117,36 @@ export default function WorkingHoursSettings() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">ساعات العمل</div>
-          <div className="page-sub">حدّد دوام المحل الأسبوعي والأوقات المغلقة</div>
+          <div className="page-title">{t("navWorkingHours")}</div>
+          <div className="page-sub">{t("wh.sub")}</div>
         </div>
       </div>
 
       <div className="card">
         <div className="card-header">
-          <h3 className="card-title">🕐 الدوام الأسبوعي</h3>
-          <Button onClick={saveWeek} loading={saving}>حفظ التغييرات</Button>
+          <h3 className="card-title">🕐 {t("wh.weekly")}</h3>
+          <Button onClick={saveWeek} loading={saving}>{t("wh.saveChanges")}</Button>
         </div>
         <div className="card-pad col" style={{ gap: 10 }}>
           {week.map((d) => (
             <div key={d.dayOfWeek} className="row" style={{ gap: 14, padding: "8px 0", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
-              <div style={{ width: 90, fontWeight: 700 }}>{DAYS[d.dayOfWeek]}</div>
+              <div style={{ width: 90, fontWeight: 700 }}>{dayNames[d.dayOfWeek]}</div>
               <label className="row" style={{ gap: 6, cursor: "pointer", width: 120 }}>
                 <input type="checkbox" checked={!d.isClosed} onChange={(e) => updateDay(d.dayOfWeek, { isClosed: !e.target.checked })} />
-                <span className={d.isClosed ? "soft" : ""}>{d.isClosed ? "مغلق" : "مفتوح"}</span>
+                <span className={d.isClosed ? "soft" : ""}>{d.isClosed ? t("svc.closed") : t("wh.open")}</span>
               </label>
               <div className="row" style={{ gap: 8, opacity: d.isClosed ? 0.4 : 1, pointerEvents: d.isClosed ? "none" : "auto" }}>
                 <input className="input" type="time" style={{ width: 130 }} value={d.startTime} onChange={(e) => updateDay(d.dayOfWeek, { startTime: e.target.value })} />
-                <span className="soft">إلى</span>
+                <span className="soft">{t("svc.to")}</span>
                 <input className="input" type="time" style={{ width: 130 }} value={d.endTime} onChange={(e) => updateDay(d.dayOfWeek, { endTime: e.target.value })} />
               </div>
               <div className="row" style={{ gap: 8, opacity: d.isClosed ? 0.4 : 1, pointerEvents: d.isClosed ? "none" : "auto" }}>
-                <span className="soft">استراحة</span>
+                <span className="soft">{t("wh.break")}</span>
                 <input className="input" type="time" style={{ width: 120 }} value={d.breakStartTime || ""} onChange={(e) => updateDay(d.dayOfWeek, { breakStartTime: e.target.value })} />
-                <span className="soft">إلى</span>
+                <span className="soft">{t("svc.to")}</span>
                 <input className="input" type="time" style={{ width: 120 }} value={d.breakEndTime || ""} onChange={(e) => updateDay(d.dayOfWeek, { breakEndTime: e.target.value })} />
                 {(d.breakStartTime || d.breakEndTime) && (
-                  <Button size="sm" variant="ghost" onClick={() => updateDay(d.dayOfWeek, { breakStartTime: "", breakEndTime: "" })}>مسح</Button>
+                  <Button size="sm" variant="ghost" onClick={() => updateDay(d.dayOfWeek, { breakStartTime: "", breakEndTime: "" })}>{t("wh.clear")}</Button>
                 )}
               </div>
             </div>
@@ -153,62 +156,62 @@ export default function WorkingHoursSettings() {
 
       <div className="card mt-3">
         <div className="card-header">
-          <h3 className="card-title">🚫 الأوقات المغلقة (إجازات / مناسبات)</h3>
-          <Button variant="ghost" onClick={() => setModal(true)}>+ إضافة إغلاق</Button>
+          <h3 className="card-title">🚫 {t("wh.blockedTimes")}</h3>
+          <Button variant="ghost" onClick={() => setModal(true)}>+ {t("wh.addBlock")}</Button>
         </div>
         {blocked.length ? (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>التاريخ</th><th>الفترة</th><th>يخص</th><th>السبب</th><th></th></tr></thead>
+              <thead><tr><th>{t("date")}</th><th>{t("wh.period")}</th><th>{t("wh.appliesTo")}</th><th>{t("wh.reason")}</th><th></th></tr></thead>
               <tbody>
                 {blocked.map((b) => (
                   <tr key={b.id}>
                     <td>{formatBlockedDate(b)}</td>
                     <td>{fmtTime(b.startAt)} - {fmtTime(b.endAt)}</td>
-                    <td>{b.employee?.name || "كل المحل"}</td>
+                    <td>{b.employee?.name || t("wh.wholeBusiness")}</td>
                     <td className="muted">{b.reason || "—"}</td>
-                    <td><Button size="sm" variant="danger" onClick={() => setConfirmDel(b.id)}>حذف</Button></td>
+                    <td><Button size="sm" variant="danger" onClick={() => setConfirmDel(b.id)}>{t("delete")}</Button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <EmptyState icon="🚫" title="لا توجد أوقات مغلقة" hint="أضف إغلاقًا ليوم أو فترة معيّنة" />
+          <EmptyState icon="🚫" title={t("wh.noBlocked")} hint={t("wh.noBlockedHint")} />
         )}
       </div>
 
       <Modal
         open={modal}
         onClose={() => setModal(false)}
-        title="إغلاق فترة"
+        title={t("wh.blockPeriod")}
         footer={
           <>
-            <Button form="block-form" type="submit">حفظ</Button>
-            <Button variant="ghost" onClick={() => setModal(false)}>إلغاء</Button>
+            <Button form="block-form" type="submit">{t("save")}</Button>
+            <Button variant="ghost" onClick={() => setModal(false)}>{t("cancel")}</Button>
           </>
         }
       >
         <form id="block-form" onSubmit={addBlock} className="col" style={{ gap: 16 }}>
-          <Field label="يخص">
+          <Field label={t("wh.appliesTo")}>
             <Select value={blockForm.employeeId} onChange={(e) => setBlockForm({ ...blockForm, employeeId: e.target.value })}>
-              <option value="">كل المحل</option>
+              <option value="">{t("wh.wholeBusiness")}</option>
               {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
             </Select>
           </Field>
           <div className="grid grid-2">
-            <Field label="تاريخ البداية"><Input type="date" value={blockForm.startDate} onChange={(e) => setBlockForm({ ...blockForm, startDate: e.target.value, endDate: blockForm.endDate || e.target.value })} required /></Field>
-            <Field label="تاريخ النهاية"><Input type="date" value={blockForm.endDate} min={blockForm.startDate || undefined} onChange={(e) => setBlockForm({ ...blockForm, endDate: e.target.value })} required /></Field>
+            <Field label={t("wh.startDate")}><Input type="date" value={blockForm.startDate} onChange={(e) => setBlockForm({ ...blockForm, startDate: e.target.value, endDate: blockForm.endDate || e.target.value })} required /></Field>
+            <Field label={t("wh.endDate")}><Input type="date" value={blockForm.endDate} min={blockForm.startDate || undefined} onChange={(e) => setBlockForm({ ...blockForm, endDate: e.target.value })} required /></Field>
           </div>
           <div className="grid grid-2">
-            <Field label="من"><Input type="time" value={blockForm.start} onChange={(e) => setBlockForm({ ...blockForm, start: e.target.value })} /></Field>
-            <Field label="إلى"><Input type="time" value={blockForm.end} onChange={(e) => setBlockForm({ ...blockForm, end: e.target.value })} /></Field>
+            <Field label={t("sd.from")}><Input type="time" value={blockForm.start} onChange={(e) => setBlockForm({ ...blockForm, start: e.target.value })} /></Field>
+            <Field label={t("svc.to")}><Input type="time" value={blockForm.end} onChange={(e) => setBlockForm({ ...blockForm, end: e.target.value })} /></Field>
           </div>
-          <Field label="السبب (اختياري)"><Input value={blockForm.reason} onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })} placeholder="إجازة، صيانة..." /></Field>
+          <Field label={t("wh.reasonOptional")}><Input value={blockForm.reason} onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })} placeholder={t("wh.reasonPlaceholder")} /></Field>
         </form>
       </Modal>
 
-      <ConfirmDialog open={!!confirmDel} title="حذف الإغلاق" message="سيُتاح هذا الوقت للحجز مجددًا." confirmText="حذف" danger onConfirm={doDelete} onClose={() => setConfirmDel(null)} />
+      <ConfirmDialog open={!!confirmDel} title={t("wh.deleteTitle")} message={t("wh.deleteMsg")} confirmText={t("delete")} danger onConfirm={doDelete} onClose={() => setConfirmDel(null)} />
     </>
   );
 }

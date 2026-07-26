@@ -9,6 +9,10 @@ import {
   overlaps,
   dayBounds,
 } from "../utils/time.js";
+import {
+  buildFreeIntervals,
+  generateDynamicCandidates,
+} from "./intervalScheduling.service.js";
 
 // الحجوزات التي "تشغل" الوقت فعليًا (الملغاة لا تحجب الوقت)
 const BLOCKING_STATUSES = ["PENDING", "CONFIRMED", "COMPLETED", "NO_SHOW"];
@@ -32,22 +36,31 @@ function formatDate(d) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function overlapsBreak(startMin, endMin, hours) {
-  if (!hours.breakStartTime || !hours.breakEndTime) return false;
-  const breakStart = hhmmToMinutes(hours.breakStartTime);
-  const breakEnd = hhmmToMinutes(hours.breakEndTime);
-  if (breakEnd <= breakStart) return false;
-  return startMin < breakEnd && endMin > breakStart;
+function intervalFromDates(startAt, endAt, source, dayStart, dayEnd) {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  return {
+    start_time: start <= dayStart ? 0 : start.getHours() * 60 + start.getMinutes(),
+    end_time: end >= dayEnd ? 24 * 60 : end.getHours() * 60 + end.getMinutes(),
+    source,
+  };
 }
 
-function withFallbackBreak(hours, ...fallbacks) {
-  if (!hours) return hours;
-  const breakSource = [hours, ...fallbacks].find((item) => item?.breakStartTime && item?.breakEndTime);
-  return {
-    ...hours,
-    breakStartTime: breakSource?.breakStartTime || null,
-    breakEndTime: breakSource?.breakEndTime || null,
-  };
+function effectiveWorkingWindow(hoursRecords) {
+  const applicable = hoursRecords.filter(Boolean);
+  if (!applicable.length || applicable.some((hours) => hours.isClosed)) return null;
+  const start_time = Math.max(...applicable.map((hours) => hhmmToMinutes(hours.startTime)));
+  const end_time = Math.min(...applicable.map((hours) => hhmmToMinutes(hours.endTime)));
+  return end_time > start_time ? { start_time, end_time } : null;
+}
+
+function breakIntervals(hoursRecords) {
+  return hoursRecords.filter(Boolean).flatMap((hours) => {
+    if (!hours.breakStartTime || !hours.breakEndTime) return [];
+    const start_time = hhmmToMinutes(hours.breakStartTime);
+    const end_time = hhmmToMinutes(hours.breakEndTime);
+    return end_time > start_time ? [{ start_time, end_time, source: "break" }] : [];
+  });
 }
 
 async function isBusinessFullyBlocked(client, businessId, date) {
@@ -93,18 +106,7 @@ export async function getBusinessClosureInfo({ businessId, date, lookaheadDays =
   };
 }
 
-/**
- * يحسب الفتحات المتاحة لخدمة في يوم معيّن.
- *
- * الخوارزمية:
- *  1) جلب الخدمة لمعرفة مدتها (durationMinutes).
- *  2) تحديد الموظفين المرشحين (موظف محدد أو كل من يقدّم الخدمة).
- *  3) لكل موظف: إيجاد دوام ذلك اليوم (دوام الموظف إن وُجد وإلا دوام المحل).
- *  4) توليد فتحات متتالية بطول مدة الخدمة داخل نافذة الدوام.
- *  5) استبعاد ما يتداخل مع: الحجوزات الحالية + الأوقات المغلقة + الماضي.
- *
- * @returns {Promise<Array<{time, startAt, endAt, employeeId, employeeName}>>}
- */
+/** يحسب الأوقات المتاحة من الفجوات الحرة الفعلية لكل موظف. */
 export async function getAvailability({ businessId, serviceId, employeeId, date }) {
   if (!date) throw ApiError.badRequest("التاريخ مطلوب (date=YYYY-MM-DD)");
 
@@ -146,12 +148,13 @@ export async function getAvailability({ businessId, serviceId, employeeId, date 
 
   const serviceHours = await getServiceHours(prisma, businessId, service.id, dow);
 
-  // كل الحجوزات والأوقات المغلقة لهذا اليوم دفعة واحدة (أداء أفضل)
-  const [appointments, blocked] = await Promise.all([
+  // كل الحجوزات والإغلاقات وأقصر خدمة تُجلب دفعة واحدة.
+  const [appointments, blocked, shortestService] = await Promise.all([
     prisma.appointment.findMany({
       where: {
         businessId,
-        startAt: { gte: dayStart, lte: dayEnd },
+        startAt: { lt: dayEnd },
+        endAt: { gt: dayStart },
         status: { in: BLOCKING_STATUSES },
       },
       select: { employeeId: true, startAt: true, endAt: true },
@@ -164,62 +167,65 @@ export async function getAvailability({ businessId, serviceId, employeeId, date 
       },
       select: { employeeId: true, startAt: true, endAt: true },
     }),
+    prisma.service.aggregate({
+      where: { businessId, isActive: true },
+      _min: { durationMinutes: true },
+    }),
   ]);
 
   const now = new Date();
-  const slotsByTime = new Map(); // time -> أول موظف متاح
+  const minDuration = shortestService._min.durationMinutes || duration;
+  const allSlots = [];
 
   for (const emp of employees) {
-    // (3) دوام الموظف لهذا اليوم، وإلا دوام المحل
     const empHours = await prisma.workingHours.findFirst({
       where: { businessId, employeeId: emp.id, serviceId: null, dayOfWeek: dow },
     });
-    const hours = withFallbackBreak(serviceHours || empHours || businessHours, empHours, businessHours);
-    if (!hours || hours.isClosed) continue; // يوم إجازة
+    const hoursRecords = [businessHours, serviceHours, empHours];
+    const workingWindow = effectiveWorkingWindow(hoursRecords);
+    if (!workingWindow) continue;
 
-    const winStart = hhmmToMinutes(hours.startTime);
-    const winEnd = hhmmToMinutes(hours.endTime);
+    const busyIntervals = [
+      ...breakIntervals(hoursRecords),
+      ...appointments
+        .filter((appointment) => appointment.employeeId === emp.id)
+        .map((appointment) => intervalFromDates(appointment.startAt, appointment.endAt, "appointment", dayStart, dayEnd)),
+      ...blocked
+        .filter((item) => item.employeeId === null || item.employeeId === emp.id)
+        .map((item) => intervalFromDates(item.startAt, item.endAt, "blocked", dayStart, dayEnd)),
+    ];
+    const freeIntervals = buildFreeIntervals({
+      workingIntervals: [workingWindow],
+      busyIntervals,
+    });
+    const candidates = generateDynamicCandidates({
+      freeIntervals,
+      durationMinutes: duration,
+      minDuration,
+    });
 
-    // (4) توليد فتحات متتالية بطول الخدمة
-    for (let s = winStart; s + duration <= winEnd; s += duration) {
-      if (overlapsBreak(s, s + duration, hours)) continue;
-      const slotStart = dateAtMinutes(date, s);
-      const slotEnd = dateAtMinutes(date, s + duration);
-
-      // استبعاد الماضي
+    for (const candidate of candidates) {
+      const slotStart = dateAtMinutes(date, candidate.start_time);
       if (slotStart <= now) continue;
-
-      // (5a) تداخل مع حجوزات هذا الموظف
-      const clashAppt = appointments.some(
-        (a) =>
-          a.employeeId === emp.id &&
-          overlaps(slotStart, slotEnd, a.startAt, a.endAt)
-      );
-      if (clashAppt) continue;
-
-      // (5b) تداخل مع وقت مغلق (يخص الموظف أو المحل كله)
-      const clashBlocked = blocked.some(
-        (b) =>
-          (b.employeeId === null || b.employeeId === emp.id) &&
-          overlaps(slotStart, slotEnd, b.startAt, b.endAt)
-      );
-      if (clashBlocked) continue;
-
-      const time = minutesToHHMM(s);
-      if (!slotsByTime.has(time)) {
-        slotsByTime.set(time, {
-          time,
-          startAt: slotStart,
-          endAt: slotEnd,
-          employeeId: emp.id,
-          employeeName: emp.name,
-        });
-      }
+      allSlots.push({
+        time: minutesToHHMM(candidate.start_time),
+        startAt: slotStart,
+        endAt: dateAtMinutes(date, candidate.end_time),
+        employeeId: emp.id,
+        employeeName: emp.name,
+        priority: candidate.priority,
+      });
     }
   }
 
-  // ترتيب حسب الوقت
-  return [...slotsByTime.values()].sort((a, b) => a.startAt - b.startAt);
+  allSlots.sort((a, b) => a.priority - b.priority || a.startAt - b.startAt || a.employeeId - b.employeeId);
+  const slotsByTime = new Map();
+  for (const slot of allSlots) {
+    if (!slotsByTime.has(slot.time)) slotsByTime.set(slot.time, slot);
+  }
+  return [...slotsByTime.values()]
+    .sort((a, b) => a.startAt - b.startAt)
+    .map(({ priority, ...slot }) => slot);
 }
 
 /**
@@ -250,7 +256,7 @@ export async function createAppointmentSafe({
 
   const end = new Date(start.getTime() + service.durationMinutes * 60000);
 
-  return prisma.$transaction(async (tx) => {
+  const createInsideTransaction = async (tx) => {
     const emp = await tx.employee.findFirst({
       where: { id: Number(employeeId), businessId, isActive: true },
     });
@@ -294,7 +300,21 @@ export async function createAppointmentSafe({
     });
 
     return appointment;
-  });
+  };
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(createInsideTransaction, {
+        isolationLevel: "Serializable",
+        maxWait: 10_000,
+        timeout: 30_000,
+      });
+    } catch (error) {
+      if (error?.code !== "P2034" || attempt === 3) throw error;
+    }
+  }
+
+  throw ApiError.conflict("تعذر تثبيت الموعد بسبب حجز متزامن، يرجى المحاولة مجددًا");
 }
 
 /**
@@ -304,7 +324,6 @@ export async function createAppointmentSafe({
  * @param {{businessId:number, employeeId:number, start:Date, end:Date, excludeId?:number}} opts
  */
 export async function assertSlotAvailable(client, { businessId, employeeId, serviceId = null, start, end, excludeId = null }) {
-  // 1) ساعات العمل (دوام الموظف إن وُجد، وإلا دوام المحل العام)
   const dow = start.getDay();
   const dateStr = formatDate(start);
   const businessWh = await client.workingHours.findFirst({ where: { businessId, employeeId: null, serviceId: null, dayOfWeek: dow } });
@@ -314,44 +333,75 @@ export async function assertSlotAvailable(client, { businessId, employeeId, serv
   }
   const serviceHours = serviceId ? await getServiceHours(client, businessId, serviceId, dow) : null;
   const employeeWh = await client.workingHours.findFirst({ where: { businessId, employeeId, serviceId: null, dayOfWeek: dow } });
-  const wh = withFallbackBreak(serviceHours || employeeWh || businessWh, employeeWh, businessWh);
-  if (!wh || wh.isClosed) {
+  const hoursRecords = [businessWh, serviceHours, employeeWh];
+  const workingWindow = effectiveWorkingWindow(hoursRecords);
+  if (!workingWindow) {
     throw ApiError.badRequest("Business is closed at this time");
   }
   const startMin = start.getHours() * 60 + start.getMinutes();
   const endMin = end.getHours() * 60 + end.getMinutes();
-  if (startMin < hhmmToMinutes(wh.startTime) || endMin > hhmmToMinutes(wh.endTime)) {
+  if (startMin < workingWindow.start_time || endMin > workingWindow.end_time) {
     throw ApiError.badRequest("الوقت المختار خارج ساعات عمل المحل");
   }
-
-  // 2) التداخل مع حجوزات الموظف (مع استثناء الحجز نفسه عند إعادة الجدولة)
-  if (overlapsBreak(startMin, endMin, wh)) {
+  if (breakIntervals(hoursRecords).some((interval) => (
+    startMin < interval.end_time && endMin > interval.start_time
+  ))) {
     throw ApiError.badRequest("هذا الوقت ضمن وقت الاستراحة وغير متاح للحجز");
   }
 
-  const clash = await client.appointment.findFirst({
-    where: {
-      employeeId,
-      status: { in: BLOCKING_STATUSES },
-      startAt: { lt: end },
-      endAt: { gt: start },
-      ...(excludeId ? { id: { not: excludeId } } : {}),
-    },
-  });
-  if (clash) {
+  const { start: dayStart, end: dayEnd } = dayBounds(dateStr);
+  const [appointments, blocked, shortestService] = await Promise.all([
+    client.appointment.findMany({
+      where: {
+        businessId,
+        employeeId,
+        status: { in: BLOCKING_STATUSES },
+        startAt: { lt: dayEnd },
+        endAt: { gt: dayStart },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { startAt: true, endAt: true },
+    }),
+    client.blockedTime.findMany({
+      where: {
+        businessId,
+        OR: [{ employeeId: null }, { employeeId }],
+        startAt: { lt: dayEnd },
+        endAt: { gt: dayStart },
+      },
+      select: { startAt: true, endAt: true },
+    }),
+    client.service.aggregate({
+      where: { businessId, isActive: true },
+      _min: { durationMinutes: true },
+    }),
+  ]);
+
+  if (appointments.some((appointment) => overlaps(start, end, appointment.startAt, appointment.endAt))) {
     throw ApiError.conflict("هذا الوقت محجوز بالفعل، يرجى اختيار وقت آخر");
   }
-
-  // 3) الأوقات المغلقة (تخص الموظف أو المحل كله)
-  const blocked = await client.blockedTime.findFirst({
-    where: {
-      businessId,
-      OR: [{ employeeId: null }, { employeeId }],
-      startAt: { lt: end },
-      endAt: { gt: start },
-    },
-  });
-  if (blocked) {
+  if (blocked.some((interval) => overlaps(start, end, interval.startAt, interval.endAt))) {
     throw ApiError.conflict("هذا الوقت مغلق وغير متاح للحجز");
+  }
+
+  const busyIntervals = [
+    ...breakIntervals(hoursRecords),
+    ...appointments.map((appointment) => intervalFromDates(appointment.startAt, appointment.endAt, "appointment", dayStart, dayEnd)),
+    ...blocked.map((interval) => intervalFromDates(interval.startAt, interval.endAt, "blocked", dayStart, dayEnd)),
+  ];
+  const freeIntervals = buildFreeIntervals({
+    workingIntervals: [workingWindow],
+    busyIntervals,
+  });
+  const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60000);
+  const minDuration = shortestService._min.durationMinutes || durationMinutes;
+  const validCandidate = generateDynamicCandidates({
+    freeIntervals,
+    durationMinutes,
+    minDuration,
+  }).some((candidate) => candidate.start_time === startMin && candidate.end_time === endMin);
+
+  if (!validCandidate) {
+    throw ApiError.conflict("هذا الوقت يترك فجوة قصيرة غير قابلة للحجز، يرجى اختيار وقت مقترح آخر");
   }
 }

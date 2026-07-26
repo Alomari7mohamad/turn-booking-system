@@ -9,6 +9,7 @@ import { recordCustomerPayment } from "../services/customer.service.js";
 import { ensureAppointmentReviewToken, sendAppointmentReviewLink } from "../services/review.service.js";
 import { publicAppUrl } from "../services/whatsapp.service.js";
 import { ensureImageColumnsCapacity } from "../services/databaseMaintenance.service.js";
+import { markAppointmentRejected } from "../utils/appointmentStatus.js";
 
 // …„״§״­״¸״©: req.tenantId ״£״× …† middleware ״§„״¹״²„״ ˆƒ„ ״§״³״×״¹„״§… ‡†״§ …‚‘״¯ ״¨‡.
 
@@ -735,6 +736,21 @@ export const updateAppointment = asyncHandler(async (req, res) => {
     data.status = req.body.status;
   }
   if (req.body.notes !== undefined) data.notes = req.body.notes;
+
+  const isPendingDecision = existing.status === "PENDING"
+    && ["CONFIRMED", "CANCELLED"].includes(data.status);
+  if (isPendingDecision) {
+    const businessPolicy = await prisma.business.findUnique({
+      where: { id: req.tenantId },
+      select: { requiresAppointmentApproval: true },
+    });
+    if (!businessPolicy?.requiresAppointmentApproval) {
+      throw ApiError.badRequest("هذا المحل يؤكد الحجوزات تلقائيًا ولا يستخدم القبول أو الرفض اليدوي");
+    }
+    if (data.status === "CANCELLED") {
+      data.notes = markAppointmentRejected(data.notes ?? existing.notes);
+    }
+  }
 
   if (req.body.startAt !== undefined) {
     const start = new Date(req.body.startAt);

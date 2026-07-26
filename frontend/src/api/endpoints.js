@@ -108,8 +108,8 @@ export const publicApi = {
   business: (slug) => api.get(`/public/${slug}`).then((r) => r.data),
   availability: (slug, params) =>
     api.get(`/public/${slug}/availability`, { params }).then((r) => r.data),
-  findAppointmentByPhone: (slug, phone) =>
-    api.get(`/public/${slug}/appointments/by-phone`, { params: { phone } }).then((r) => r.data),
+  findAppointmentByPhone: (slug, phone, includePast = false) =>
+    api.get(`/public/${slug}/appointments/by-phone`, { params: { phone, includePast } }).then((r) => r.data),
   updateCustomerProfile: (slug, data) =>
     api.patch(`/public/${slug}/customer-profile`, data).then((r) => r.data),
   printTicket: (slug, phone) =>

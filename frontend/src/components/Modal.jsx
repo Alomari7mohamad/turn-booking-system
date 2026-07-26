@@ -1,6 +1,8 @@
 import { useEffect } from "react";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
 export function Modal({ open, onClose, title, children, footer, large, closeOnOverlay = true }) {
+  const { t } = useLanguage();
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose?.();
@@ -15,7 +17,7 @@ export function Modal({ open, onClose, title, children, footer, large, closeOnOv
       <div className={`modal ${large ? "modal-lg" : ""}`}>
         <div className="modal-header">
           <h3 className="card-title">{title}</h3>
-          <button className="icon-btn" onClick={onClose} aria-label="إغلاق">
+          <button className="icon-btn" onClick={onClose} aria-label={t("close")}>
             ×
           </button>
         </div>

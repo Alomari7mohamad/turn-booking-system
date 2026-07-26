@@ -18,13 +18,15 @@ import {
   PAYMENT_STATUS_META,
   STATUS_META,
 } from "../components/ui.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
+import i18n from "../i18n/index.js";
 
 const FILTERS = [
-  { key: "all", label: "كل الأدوار" },
-  { key: "late", label: "الزبائن المتأخرون" },
-  { key: "rejected", label: "الأدوار المرفوضة" },
-  { key: "paidExpired", label: "الأدوار المدفوعة" },
-  { key: "noShow", label: "لم يحضر" },
+  { key: "all", labelKey: "bm.filterAll" },
+  { key: "late", labelKey: "bm.filterLate" },
+  { key: "rejected", labelKey: "bm.filterRejected" },
+  { key: "paidExpired", labelKey: "bm.filterPaid" },
+  { key: "noShow", labelKey: "statusNoShow" },
 ];
 
 function todayInput() {
@@ -46,13 +48,14 @@ function isExpired(appointment) {
 function queuePaymentLabel(appointment, filter) {
   if (appointment.status === "CANCELLED") return "-";
   if (["paidExpired", "noShow"].includes(filter) && appointment.paymentMethod !== "ONLINE") return "-";
-  if (appointment.paymentMethod === "ONLINE" && appointment.paymentStatus === "PAID") return "تم الدفع إلكترونياً";
-  if (amountOf(appointment) === 0) return "مجانية";
+  if (appointment.paymentMethod === "ONLINE" && appointment.paymentStatus === "PAID") return i18n.t("acct.paidOnlineNoShow");
+  if (amountOf(appointment) === 0) return i18n.t("pb.free");
   return PAYMENT_STATUS_META[appointment.paymentStatus]?.label || appointment.paymentStatus;
 }
 
 export default function BookingManagementPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const { api, business } = useBusinessManage();
   const navigate = useNavigate();
   const toast = useToast();
@@ -107,7 +110,7 @@ export default function BookingManagementPage() {
   const markNoShow = async (appointment) => {
     try {
       await api.updateAppointment(appointment.id, { status: "NO_SHOW" });
-      toast.success("تم نقل الدور إلى قسم لم يحضر");
+      toast.success(t("bm.movedNoShow"));
       load();
     } catch (err) {
       toast.error(err.message);
@@ -143,7 +146,7 @@ export default function BookingManagementPage() {
         employeeId: slot.employeeId,
         startAt: slot.startAt,
       });
-      toast.success("تمت إعادة الزبون للدور");
+      toast.success(t("bm.requeued"));
       setRequeue(null);
       load();
     } catch (err) {
@@ -175,8 +178,8 @@ export default function BookingManagementPage() {
     <div data-no-auto-translate="true">
       <div className="page-head">
         <div>
-          <div className="page-title">إدارة الحجوزات</div>
-          <div className="page-sub">متابعة الأدوار المتأخرة، المرفوضة، المدفوعة، والتي لم يحضر أصحابها.</div>
+          <div className="page-title">{t("navAppointmentsManagement")}</div>
+          <div className="page-sub">{t("bm.sub")}</div>
         </div>
       </div>
 
@@ -189,16 +192,16 @@ export default function BookingManagementPage() {
               onClick={() => setFilter(item.key)}
               type="button"
             >
-              {item.label} ({groups[item.key]?.length || 0})
+              {t(item.labelKey)} ({groups[item.key]?.length || 0})
             </button>
           ))}
         </div>
         {filter === "all" && (
           <div className="grid grid-2 mt-3">
-            <Field label="من تاريخ">
+            <Field label={t("cust.fromDate")}>
               <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
             </Field>
-            <Field label="إلى تاريخ">
+            <Field label={t("cust.toDate")}>
               <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
             </Field>
           </div>
@@ -211,14 +214,14 @@ export default function BookingManagementPage() {
             <table>
               <thead>
                 <tr>
-                  <th>الزبون</th>
-                  <th>الخدمة</th>
-                  <th>العامل</th>
-                  <th>الموعد</th>
-                  <th>المبلغ</th>
-                  <th>الحالة</th>
-                  <th>الدفع</th>
-                  <th>إجراء</th>
+                  <th>{t("customer")}</th>
+                  <th>{t("service")}</th>
+                  <th>{t("employee")}</th>
+                  <th>{t("sd.appointment")}</th>
+                  <th>{t("sd.amount")}</th>
+                  <th>{t("status")}</th>
+                  <th>{t("ap.payment")}</th>
+                  <th>{t("action")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -240,7 +243,7 @@ export default function BookingManagementPage() {
                           {fmtTime(appointment.startAt)} - {fmtTime(appointment.endAt)}
                         </span>
                       </td>
-                      <td>{amount === 0 ? "مجانية" : fmtPrice(amount)}</td>
+                      <td>{amount === 0 ? t("pb.free") : fmtPrice(amount)}</td>
                       <td>
                         <Badge tone={STATUS_META[appointment.status]?.tone}>
                           {STATUS_META[appointment.status]?.label || appointment.status}
@@ -256,15 +259,15 @@ export default function BookingManagementPage() {
                       <td>
                         {appointment.status === "COMPLETED" && currentBusiness?.reviewsEnabled && !appointment.review ? (
                           <Button size="sm" variant="primary" onClick={() => sendReviewLink(appointment)}>
-                            إرسال رابط التقييم
+                            {t("sd.sendReview")}
                           </Button>
                         ) : filter === "late" ? (
                           <div className="row wrap" style={{ gap: 6 }}>
                             <Button size="sm" variant="ghost" onClick={() => markNoShow(appointment)}>
-                              لم يحضر
+                              {t("statusNoShow")}
                             </Button>
                             <Button size="sm" variant="secondary" onClick={() => openRequeue(appointment)}>
-                              إعادته للدور
+                              {t("bm.requeueBtn")}
                             </Button>
                           </div>
                         ) : (
@@ -279,34 +282,34 @@ export default function BookingManagementPage() {
           </div>
         ) : (
           <EmptyState
-            title="لا توجد أدوار في هذا القسم"
-            hint="اختر قسماً آخر أو غيّر نطاق التاريخ في قسم كل الأدوار."
+            title={t("bm.noRows")}
+            hint={t("bm.noRowsHint")}
           />
         )}
       </div>
 
-      <Modal open={!!requeue} onClose={() => setRequeue(null)} title="اختيار يوم ووقت جديد" large>
+      <Modal open={!!requeue} onClose={() => setRequeue(null)} title={t("bm.chooseNewTime")} large>
         {!requeue || requeue.loading ? (
           <Spinner />
         ) : (
           <div className="col" style={{ gap: 18 }}>
             <div className="card card-pad" style={{ background: "var(--surface-2)" }}>
               <strong>{requeue.appointment.customerName}</strong>
-              <div className="soft">الخدمة: {requeue.appointment.service?.name}</div>
-              <div className="soft">العامل المطلوب: {requeue.options.originalEmployee?.name}</div>
-              <div className="soft">الهاتف: {requeue.appointment.customerPhone}</div>
+              <div className="soft">{t("service")}: {requeue.appointment.service?.name}</div>
+              <div className="soft">{t("bm.requestedStaff")}: {requeue.options.originalEmployee?.name}</div>
+              <div className="soft">{t("phone")}: {requeue.appointment.customerPhone}</div>
             </div>
 
-            <Field label="اختر اليوم والتاريخ">
+            <Field label={t("bm.chooseDay")}>
               <Input type="date" value={requeueDate} onChange={(event) => changeRequeueDate(event.target.value)} />
             </Field>
 
             <div className="help-text">
-              الخدمة والعامل وبيانات طالب الخدمة محفوظة من الدور الأصلي. اختر الوقت فقط لإعادته للدور.
+              {t("bm.requeueHelp")}
             </div>
 
             <div>
-              <h3 className="card-title">الأوقات المتاحة عند العامل المطلوب</h3>
+              <h3 className="card-title">{t("bm.slotsRequested")}</h3>
               {requeue.options.originalSlots?.length ? (
                 <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
                   {requeue.options.originalSlots.map((slot) => (
@@ -322,13 +325,13 @@ export default function BookingManagementPage() {
                 </div>
               ) : (
                 <div className="soft" style={{ marginTop: 8 }}>
-                  العامل المطلوب غير متاح في هذا اليوم.
+                  {t("bm.requestedUnavailable")}
                 </div>
               )}
             </div>
 
             <div>
-              <h3 className="card-title">عمال آخرون يقدمون نفس الخدمة</h3>
+              <h3 className="card-title">{t("bm.otherStaff")}</h3>
               {requeue.options.alternativeSlots?.length ? (
                 <div className="grid grid-2 mt-2">
                   {requeue.options.alternativeSlots.map((slot) => (
@@ -349,14 +352,14 @@ export default function BookingManagementPage() {
                 </div>
               ) : (
                 <div className="soft" style={{ marginTop: 8 }}>
-                  لا يوجد أي عامل آخر متاح حالياً لنفس الخدمة.
+                  {t("bm.noOtherStaff")}
                 </div>
               )}
             </div>
 
             {!requeue.options.originalSlots?.length && !requeue.options.alternativeSlots?.length && (
               <Button variant="ghost" onClick={openPublicBooking}>
-                حجز موعد جديد
+                {t("bm.bookNew")}
               </Button>
             )}
           </div>

@@ -4,6 +4,8 @@ import { staffApi } from "../api/endpoints.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../components/Toast.jsx";
 import { Badge, Button, EmptyState, Spinner, fmtDate, fmtPrice, fmtTime, PAYMENT_STATUS_META } from "../components/ui.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
+import i18n from "../i18n/index.js";
 
 function amountOf(appointment) {
   return Number(appointment.paymentAmount ?? appointment.service?.price ?? 0);
@@ -30,13 +32,14 @@ function isToday(appointment) {
 
 function paymentLabel(appointment) {
   if (appointment.status === "CANCELLED") return "-";
-  if (appointment.paymentMethod === "ONLINE" && appointment.paymentStatus === "PAID") return "تم الدفع إلكترونياً";
-  if (amountOf(appointment) === 0) return "مجانية";
+  if (appointment.paymentMethod === "ONLINE" && appointment.paymentStatus === "PAID") return i18n.t("acct.paidOnlineNoShow");
+  if (amountOf(appointment) === 0) return i18n.t("pb.free");
   return PAYMENT_STATUS_META[appointment.paymentStatus]?.label || appointment.paymentStatus;
 }
 
 export default function StaffAccountsPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const toast = useToast();
   const [data, setData] = useState(null);
   const [invoice, setInvoice] = useState(null);
@@ -90,7 +93,7 @@ export default function StaffAccountsPage() {
 
   const printInvoice = (appointment) => {
     if (!isPaid(appointment) || appointment.status === "CANCELLED") {
-      toast.error("لا يمكن طباعة فاتورة قبل استلام الدفع");
+      toast.error(t("acct.cantPrintUnpaid"));
       return;
     }
     setInvoice(appointment);
@@ -101,25 +104,25 @@ export default function StaffAccountsPage() {
     <div data-no-auto-translate="true">
       <div className="page-head">
         <div>
-          <div className="page-title">الحسابات</div>
-          <div className="page-sub">حسابات اليوم الحالي فقط، وحالة الدفع للعرض فقط</div>
+          <div className="page-title">{t("acct.title")}</div>
+          <div className="page-sub">{t("sa.sub")}</div>
         </div>
       </div>
 
       <div className="grid grid-stats">
-        <div className="card card-pad"><div className="soft">مدفوع اليوم</div><strong style={{ fontSize: 28 }}>{fmtPrice(paidToday)}</strong></div>
-        <div className="card card-pad"><div className="soft">غير مدفوع اليوم</div><strong style={{ fontSize: 28 }}>{fmtPrice(pendingToday)}</strong></div>
-        <div className="card card-pad"><div className="soft">إجمالي المدفوع اليوم</div><strong style={{ fontSize: 28 }}>{fmtPrice(allPaid)}</strong></div>
-        <div className="card card-pad"><div className="soft">مسترجعة</div><strong style={{ fontSize: 28 }}>{fmtPrice(refundTotal)}</strong></div>
+        <div className="card card-pad"><div className="soft">{t("sec.paidToday")}</div><strong style={{ fontSize: 28 }}>{fmtPrice(paidToday)}</strong></div>
+        <div className="card card-pad"><div className="soft">{t("sec.pendingToday")}</div><strong style={{ fontSize: 28 }}>{fmtPrice(pendingToday)}</strong></div>
+        <div className="card card-pad"><div className="soft">{t("sa.totalPaidToday")}</div><strong style={{ fontSize: 28 }}>{fmtPrice(allPaid)}</strong></div>
+        <div className="card card-pad"><div className="soft">{t("acct.refunded")}</div><strong style={{ fontSize: 28 }}>{fmtPrice(refundTotal)}</strong></div>
       </div>
 
       <div className="card mt-3">
         <div className="row wrap" style={{ gap: 8, padding: 16, borderBottom: "1px solid var(--border)" }}>
           {[
-            ["unpaid", "غير مدفوع"],
-            ["paid", "مدفوع"],
-            ["refund", "مدفوع لم يحضر"],
-            ["all", "الكل"],
+            ["unpaid", t("acct.filterUnpaid")],
+            ["paid", t("acct.filterPaid")],
+            ["refund", t("acct.filterRefund")],
+            ["all", t("acct.filterAll")],
           ].map(([key, label]) => (
             <button
               key={key}
@@ -136,13 +139,13 @@ export default function StaffAccountsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>الزبون</th>
-                  <th>الخدمة</th>
-                  <th>العامل</th>
-                  <th>الموعد</th>
-                  <th>المبلغ</th>
-                  <th>الدفع</th>
-                  <th>إجراءات</th>
+                  <th>{t("customer")}</th>
+                  <th>{t("service")}</th>
+                  <th>{t("employee")}</th>
+                  <th>{t("sd.appointment")}</th>
+                  <th>{t("sd.amount")}</th>
+                  <th>{t("ap.payment")}</th>
+                  <th>{t("actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -157,12 +160,12 @@ export default function StaffAccountsPage() {
                       <td>{a.service?.name}</td>
                       <td>{a.employee?.name || "-"}</td>
                       <td>{fmtDate(a.startAt)} <span className="soft">{fmtTime(a.startAt)}</span></td>
-                      <td>{free ? "مجانية" : fmtPrice(amount)}</td>
+                      <td>{free ? t("pb.free") : fmtPrice(amount)}</td>
                       <td>{rejected ? <span className="soft">-</span> : <Badge tone={paid ? "success" : "warning"}>{paymentLabel(a)}</Badge>}</td>
                       <td>
                         <div className="row wrap" style={{ gap: 6 }}>
-                          {!rejected && !paid && a.paymentMethod === "PAY_AT_STORE" && <span className="soft">يتم استلام الدفع من صفحة الدفع فقط</span>}
-                          {!rejected && paid && <Button size="sm" variant="ghost" onClick={() => printInvoice(a)}>طباعة فاتورة</Button>}
+                          {!rejected && !paid && a.paymentMethod === "PAY_AT_STORE" && <span className="soft">{t("sec.paymentLocked")}</span>}
+                          {!rejected && paid && <Button size="sm" variant="ghost" onClick={() => printInvoice(a)}>{t("acct.printInvoice")}</Button>}
                         </div>
                       </td>
                     </tr>
@@ -172,7 +175,7 @@ export default function StaffAccountsPage() {
             </table>
           </div>
         ) : (
-          <EmptyState title="لا توجد حسابات" hint="لا توجد حجوزات مالية ضمن الفلتر المحدد" />
+          <EmptyState title={t("sa.noAccounts")} hint={t("sa.noAccountsHint")} />
         )}
       </div>
 
@@ -181,25 +184,25 @@ export default function StaffAccountsPage() {
           <div className="invoice-box">
             <div className="invoice-head">
               <div>
-                <h1>فاتورة</h1>
+                <h1>{t("acct.invoice")}</h1>
                 <p>{user?.business?.name}</p>
               </div>
               <img src={user?.business?.logoUrl || "/oh-tech-logo.jpg"} alt={user?.business?.name || "O&H Tech"} />
             </div>
             <div className="invoice-meta">
-              <span>رقم الفاتورة: #{invoice.id}</span>
-              <span>التاريخ: {fmtDate(new Date())}</span>
+              <span>{t("acct.invoiceNo")}: #{invoice.id}</span>
+              <span>{t("acct.date")}: {fmtDate(new Date())}</span>
             </div>
             <div className="invoice-lines">
-              <div><span>الزبون</span><strong>{invoice.customerName}</strong></div>
-              <div><span>الهاتف</span><strong>{invoice.customerPhone}</strong></div>
-              <div><span>الخدمة</span><strong>{invoice.service?.name}</strong></div>
-              <div><span>العامل</span><strong>{invoice.employee?.name}</strong></div>
-              <div><span>الموعد</span><strong>{fmtDate(invoice.startAt)} {fmtTime(invoice.startAt)}</strong></div>
+              <div><span>{t("customer")}</span><strong>{invoice.customerName}</strong></div>
+              <div><span>{t("phone")}</span><strong>{invoice.customerPhone}</strong></div>
+              <div><span>{t("service")}</span><strong>{invoice.service?.name}</strong></div>
+              <div><span>{t("employee")}</span><strong>{invoice.employee?.name}</strong></div>
+              <div><span>{t("sd.appointment")}</span><strong>{fmtDate(invoice.startAt)} {fmtTime(invoice.startAt)}</strong></div>
             </div>
             <div className="invoice-total">
-              <span>الإجمالي</span>
-              <strong>{amountOf(invoice) === 0 ? "مجانية" : fmtPrice(amountOf(invoice))}</strong>
+              <span>{t("acct.total")}</span>
+              <strong>{amountOf(invoice) === 0 ? t("pb.free") : fmtPrice(amountOf(invoice))}</strong>
             </div>
           </div>
         </div>

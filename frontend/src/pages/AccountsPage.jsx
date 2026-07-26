@@ -5,114 +5,6 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../components/Toast.jsx";
 import { Badge, Button, EmptyState, Spinner, fmtDate, fmtPrice, fmtTime, PAYMENT_STATUS_META } from "../components/ui.jsx";
 
-const copy = {
-  ar: {
-    title: "الحسابات",
-    sub: "متابعة المدفوعات والفواتير المالية للحجوزات",
-    totalPaid: "إجمالي المدفوع",
-    pendingAmount: "غير مدفوع",
-    invoices: "الفواتير",
-    customer: "الزبون",
-    phone: "الهاتف",
-    service: "الخدمة",
-    appointment: "الموعد",
-    paidAmount: "المبلغ",
-    paymentStatus: "حالة الدفع",
-    printInvoice: "طباعة فاتورة",
-    noRows: "لا توجد عمليات مالية",
-    noRowsHint: "ستظهر هنا الحجوزات والمبالغ المرتبطة بها",
-    invoice: "فاتورة",
-    invoiceNo: "رقم الفاتورة",
-    date: "التاريخ",
-    employee: "العامل",
-    amount: "المبلغ",
-    total: "الإجمالي",
-    paid: "مدفوع",
-    pending: "بانتظار الدفع",
-    free: "مجانية",
-  },
-  he: {
-    title: "חשבונות",
-    sub: "מעקב אחר תשלומים וחשבוניות של תורים",
-    totalPaid: "סה״כ שולם",
-    pendingAmount: "טרם שולם",
-    invoices: "חשבוניות",
-    customer: "לקוח",
-    phone: "טלפון",
-    service: "שירות",
-    appointment: "תור",
-    paidAmount: "סכום",
-    paymentStatus: "סטטוס תשלום",
-    printInvoice: "הדפסת חשבונית",
-    noRows: "אין פעולות כספיות",
-    noRowsHint: "כאן יופיעו התורים והסכומים שלהם",
-    invoice: "חשבונית",
-    invoiceNo: "מספר חשבונית",
-    date: "תאריך",
-    employee: "עובד",
-    amount: "סכום",
-    total: "סה״כ",
-    paid: "שולם",
-    pending: "ממתין לתשלום",
-    free: "חינם",
-  },
-};
-
-const cleanCopy = {
-  ar: {
-    title: "الحسابات",
-    sub: "متابعة المدفوعات والفواتير المالية للحجوزات",
-    totalPaid: "إجمالي المدفوع",
-    pendingAmount: "غير مدفوع",
-    invoices: "الفواتير",
-    customer: "الزبون",
-    phone: "الهاتف",
-    service: "الخدمة",
-    appointment: "الموعد",
-    paidAmount: "المبلغ",
-    paymentStatus: "حالة الدفع",
-    printInvoice: "طباعة فاتورة",
-    noRows: "لا توجد عمليات مالية",
-    noRowsHint: "ستظهر هنا الحجوزات والمبالغ المرتبطة بها",
-    invoice: "فاتورة",
-    invoiceNo: "رقم الفاتورة",
-    date: "التاريخ",
-    employee: "العامل",
-    amount: "المبلغ",
-    total: "الإجمالي",
-    paid: "مدفوع",
-    pending: "بانتظار الدفع",
-    free: "مجانية",
-    paidOnlineNoShow: "تم الدفع إلكترونياً",
-  },
-  he: {
-    title: "חשבונות",
-    sub: "מעקב אחר תשלומים וחשבוניות של התורים",
-    totalPaid: "סה״כ שולם",
-    pendingAmount: "לא שולם",
-    invoices: "חשבוניות",
-    customer: "לקוח",
-    phone: "טלפון",
-    service: "שירות",
-    appointment: "תור",
-    paidAmount: "סכום",
-    paymentStatus: "סטטוס תשלום",
-    printInvoice: "הדפסת חשבונית",
-    noRows: "אין פעולות כספיות",
-    noRowsHint: "כאן יופיעו התורים והסכומים שלהם",
-    invoice: "חשבונית",
-    invoiceNo: "מספר חשבונית",
-    date: "תאריך",
-    employee: "עובד",
-    amount: "סכום",
-    total: "סה״כ",
-    paid: "שולם",
-    pending: "ממתין לתשלום",
-    free: "חינם",
-    paidOnlineNoShow: "שולם אונליין",
-  },
-};
-
 function amountOf(appointment) {
   return Number(appointment.paymentAmount ?? appointment.service?.price ?? 0);
 }
@@ -128,7 +20,7 @@ function needsRefund(appointment) {
 function paymentLabel(appointment, c) {
   if (appointment.status === "CANCELLED") return "-";
   if (appointment.paymentMethod === "ONLINE" && appointment.paymentStatus === "PAID") {
-    return c.paidOnlineNoShow || "تم الدفع إلكترونياً";
+    return c.paidOnlineNoShow;
   }
   if (amountOf(appointment) === 0) return c.free;
   if (appointment.paymentStatus === "PAID") return c.paid;
@@ -140,9 +32,9 @@ export default function AccountsPage() {
   const { api, business } = useBusinessManage();
   const { user } = useAuth();
   const activeBusiness = business || user?.business || null;
-  const { language } = useLanguage();
+  const { t } = useLanguage();
   const toast = useToast();
-  const c = cleanCopy[language] || cleanCopy.ar;
+  const c = new Proxy({}, { get: (_, key) => t("acct." + key) });
   const [appointments, setAppointments] = useState(null);
   const [invoice, setInvoice] = useState(null);
   const [paymentFilter, setPaymentFilter] = useState("unpaid");
@@ -185,7 +77,7 @@ export default function AccountsPage() {
 
   const printInvoice = (appointment) => {
     if (!isPaid(appointment) || appointment.status === "CANCELLED") {
-      toast.error("لا يمكن طباعة فاتورة قبل استلام الدفع");
+      toast.error(c.cantPrintUnpaid);
       return;
     }
     setInvoice(appointment);
@@ -217,7 +109,7 @@ export default function AccountsPage() {
           <strong style={{ fontSize: 28 }}>{filteredRows.length}</strong>
         </div>
         <div className="card card-pad">
-          <div className="soft">{language === "he" ? "להחזר" : "مسترجعة"}</div>
+          <div className="soft">{c.refunded}</div>
           <strong style={{ fontSize: 28 }}>{fmtPrice(refundTotal)}</strong>
         </div>
       </div>
@@ -225,10 +117,10 @@ export default function AccountsPage() {
       <div className="card mt-3">
         <div className="row wrap" style={{ gap: 8, padding: 16, borderBottom: "1px solid var(--border)" }}>
           {[
-            ["unpaid", language === "he" ? "לא שולם" : "غير مدفوع"],
-            ["paid", language === "he" ? "שולם" : "مدفوع"],
-            ["refund", language === "he" ? "שולם ולא הגיע" : "مدفوع لم يحضر"],
-            ["all", language === "he" ? "הכל" : "الكل"],
+            ["unpaid", c.filterUnpaid],
+            ["paid", c.filterPaid],
+            ["refund", c.filterRefund],
+            ["all", c.filterAll],
           ].map(([key, label]) => (
             <button
               key={key}

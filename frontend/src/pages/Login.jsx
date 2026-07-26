@@ -24,21 +24,13 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const isHebrew = language === "he";
-  const copy = isHebrew
-    ? {
-        forgot: "שכחת סיסמה?",
-        helpTitle: "צריך עזרה?",
-        helpText: "צור קשר עם תמיכת הלקוחות",
-        credit: "האתר נבנה על ידי",
-      }
-    : {
-        forgot: "نسيت كلمة المرور؟",
-        helpTitle: "محتاج مساعدة؟",
-        helpText: "تواصل مع دعم العملاء",
-        credit: "تم بناء هذا الموقع في شركة",
-      };
-  const supportWhatsappUrl = `https://wa.me/972506446682?text=${encodeURIComponent("مرحبا، أريد مساعدة")}`;
+  const copy = {
+    forgot: t("login.forgot"),
+    helpTitle: t("login.helpTitle"),
+    helpText: t("login.helpText"),
+    credit: t("builtBy"),
+  };
+  const supportWhatsappUrl = `https://wa.me/972506446682?text=${encodeURIComponent(t("login.whatsappHelp"))}`;
 
   useEffect(() => {
     resetBrandTheme();

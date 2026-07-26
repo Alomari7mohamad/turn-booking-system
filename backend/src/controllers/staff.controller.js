@@ -4,6 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { assertSlotAvailable, getAvailability } from "../services/availability.service.js";
 import { ensureAppointmentReviewToken, sendAppointmentReviewLink } from "../services/review.service.js";
 import { recordCustomerPayment } from "../services/customer.service.js";
+import { markAppointmentRejected } from "../utils/appointmentStatus.js";
 
 // ״§„…ˆ״¸ ״±‰ …ˆ״§״¹״¯‡ ‚״·: †״±״¨״· ״­״³״§״¨ ״§„…״³״×״®״¯… (req.user) ״¨״³״¬„ ״§„…ˆ״¸ ״¹״¨״± userId.
 async function getEmployeeForUser(userId, businessId) {
@@ -74,6 +75,18 @@ export const updateMyAppointmentStatus = asyncHandler(async (req, res) => {
   });
   if (!appt) throw ApiError.notFound("״§„…ˆ״¹״¯ ״÷״± …ˆ״¬ˆ״¯ ״¶…† …ˆ״§״¹״¯ƒ");
 
+  const isPendingDecision = appt.status === "PENDING"
+    && ["CONFIRMED", "CANCELLED"].includes(status);
+  if (isPendingDecision) {
+    const businessPolicy = await prisma.business.findUnique({
+      where: { id: req.tenantId },
+      select: { requiresAppointmentApproval: true },
+    });
+    if (!businessPolicy?.requiresAppointmentApproval) {
+      throw ApiError.badRequest("هذا المحل يؤكد الحجوزات تلقائيًا ولا يستخدم القبول أو الرفض اليدوي");
+    }
+  }
+
   const serviceForConfirmation = status === "CONFIRMED" && appt.paymentAmount == null
     ? await prisma.service.findUnique({ where: { id: appt.serviceId }, select: { price: true } })
     : null;
@@ -81,6 +94,9 @@ export const updateMyAppointmentStatus = asyncHandler(async (req, res) => {
     where: { id },
     data: {
       status,
+      ...(isPendingDecision && status === "CANCELLED"
+        ? { notes: markAppointmentRejected(appt.notes) }
+        : {}),
       ...(serviceForConfirmation ? { paymentAmount: serviceForConfirmation.price, paymentStatus: "PENDING" } : {}),
     },
   });

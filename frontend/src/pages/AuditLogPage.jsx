@@ -1,32 +1,36 @@
 import { useEffect, useState } from "react";
 import { useBusinessManage } from "../context/BusinessManageContext.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
+import i18n from "../i18n/index.js";
 import { Spinner, Badge, EmptyState, fmtDate, fmtTime } from "../components/ui.jsx";
 
+// Enum -> display metadata. Technical action codes stay in the DB; labels are
+// live getters so the log follows the active language.
 const ACTION_META = {
-  BOOKING_CREATED: { label: "إنشاء حجز", icon: "📅", tone: "success" },
-  BOOKING_CANCELLED: { label: "إلغاء حجز", icon: "🚫", tone: "danger" },
-  BOOKING_UPDATED: { label: "تعديل حجز", icon: "✏️", tone: "info" },
-  PAYMENT_STATUS_CHANGED: { label: "تغيير حالة الدفع", icon: "💳", tone: "warning" },
-  PAYMENT_SETTINGS_CHANGED: { label: "تغيير إعدادات الدفع", icon: "⚙️", tone: "primary" },
-  BUSINESS_SETTINGS_CHANGED: { label: "تغيير بيانات المحل", icon: "🏪", tone: "info" },
-  WORKING_HOURS_CHANGED: { label: "تغيير أوقات الدوام", icon: "🕐", tone: "primary" },
+  BOOKING_CREATED: { get label() { return i18n.t("audit.actCreated"); }, icon: "📅", tone: "success" },
+  BOOKING_CANCELLED: { get label() { return i18n.t("audit.actCancelled"); }, icon: "🚫", tone: "danger" },
+  BOOKING_UPDATED: { get label() { return i18n.t("audit.actUpdated"); }, icon: "✏️", tone: "info" },
+  PAYMENT_STATUS_CHANGED: { get label() { return i18n.t("audit.actPayStatus"); }, icon: "💳", tone: "warning" },
+  PAYMENT_SETTINGS_CHANGED: { get label() { return i18n.t("audit.actPaySettings"); }, icon: "⚙️", tone: "primary" },
+  BUSINESS_SETTINGS_CHANGED: { get label() { return i18n.t("audit.actBizSettings"); }, icon: "🏪", tone: "info" },
+  WORKING_HOURS_CHANGED: { get label() { return i18n.t("audit.actHours"); }, icon: "🕐", tone: "primary" },
 };
 
 const FIELD_LABELS = {
-  name: "اسم المحل",
-  email: "البريد الإلكتروني",
-  phone: "الهاتف",
-  address: "العنوان",
-  logoUrl: "الشعار",
-  brandColor: "اللون",
-  timezone: "المنطقة الزمنية",
-  onlinePaymentEnabled: "الدفع الإلكتروني",
-  payAtStoreEnabled: "الدفع في المحل",
+  get name() { return i18n.t("audit.fldName"); },
+  get email() { return i18n.t("email"); },
+  get phone() { return i18n.t("phone"); },
+  get address() { return i18n.t("audit.fldAddress"); },
+  get logoUrl() { return i18n.t("audit.fldLogo"); },
+  get brandColor() { return i18n.t("audit.fldColor"); },
+  get timezone() { return i18n.t("audit.fldTimezone"); },
+  get onlinePaymentEnabled() { return i18n.t("audit.fldOnlinePay"); },
+  get payAtStoreEnabled() { return i18n.t("audit.fldPayStore"); },
 };
 
 const formatMetaValue = (key, value) => {
   if (key === "changes" && Array.isArray(value)) return value.map((item) => FIELD_LABELS[item] || item).join("، ");
-  if (typeof value === "boolean") return value ? "مفعل" : "غير مفعل";
+  if (typeof value === "boolean") return value ? i18n.t("audit.enabled") : i18n.t("audit.disabled");
   return String(value);
 };
 
@@ -38,6 +42,7 @@ const fmt = (d) => `${fmtDate(d)} ${fmtTime(d)}`;
 
 export default function AuditLogPage() {
   const { api } = useBusinessManage();
+  const { t } = useLanguage();
   const [logs, setLogs] = useState(null);
 
   useEffect(() => {
@@ -50,8 +55,8 @@ export default function AuditLogPage() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">سجلّ النشاط</div>
-          <div className="page-sub">آخر 100 حدث مهم في محلّك (حجوزات، دفع، إعدادات)</div>
+          <div className="page-title">{t("audit.title")}</div>
+          <div className="page-sub">{t("audit.sub")}</div>
         </div>
       </div>
 
@@ -61,10 +66,10 @@ export default function AuditLogPage() {
             <table>
               <thead>
                 <tr>
-                  <th>الحدث</th>
-                  <th>التفاصيل</th>
-                  <th>بواسطة</th>
-                  <th>الوقت</th>
+                  <th>{t("audit.event")}</th>
+                  <th>{t("audit.details")}</th>
+                  <th>{t("audit.by")}</th>
+                  <th>{t("audit.time")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -90,7 +95,7 @@ export default function AuditLogPage() {
             </table>
           </div>
         ) : (
-          <EmptyState icon="📋" title="لا توجد أحداث بعد" hint="ستظهر هنا الأحداث المهمة عند حدوثها" />
+          <EmptyState icon="📋" title={t("audit.noEvents")} hint={t("audit.noEventsHint")} />
         )}
       </div>
     </>

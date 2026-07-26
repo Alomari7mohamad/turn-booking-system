@@ -3,9 +3,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { paymentApi } from "../api/endpoints.js";
 import { Button, Spinner } from "../components/ui.jsx";
 import { BookingConfirmation } from "../components/BookingConfirmation.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
 // صفحة نتيجة الدفع — تُستخدم لكل من النجاح والفشل عبر prop.
 export default function PaymentResult({ status }) {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { state } = useLocation();
   const slug = state?.slug;
@@ -32,11 +34,9 @@ export default function PaymentResult({ status }) {
           <div className="success-circle" style={ok ? {} : { background: "var(--danger-soft)", color: "var(--danger)" }}>
             {ok ? "✓" : "✕"}
           </div>
-          <h2 style={{ fontSize: 24, fontWeight: 800 }}>{ok ? "تم الدفع وتأكيد الحجز!" : "فشل الدفع"}</h2>
+          <h2 style={{ fontSize: 24, fontWeight: 800 }}>{ok ? t("pr.successTitle") : t("pr.failTitle")}</h2>
           <p className="muted mt-1">
-            {ok
-              ? "شكرًا لك، تم استلام دفعتك وتأكيد موعدك بنجاح."
-              : "لم تكتمل عملية الدفع ولم يتم تثبيت الموعد. يمكنك المحاولة مرة أخرى."}
+            {ok ? t("pr.successText") : t("pr.failText")}
           </p>
         </div>
 
@@ -61,7 +61,7 @@ export default function PaymentResult({ status }) {
 
         <div className="text-center mt-3">
           <Button onClick={() => navigate(slug ? `/book/${slug}` : "/")}>
-            {ok ? "حجز موعد آخر" : slug ? "إعادة المحاولة" : "العودة"}
+            {ok ? t("bookAnother") : slug ? t("pr.retry") : t("pr.back")}
           </Button>
         </div>
       </div>

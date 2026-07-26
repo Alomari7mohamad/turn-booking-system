@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { publicApi } from "../api/endpoints.js";
 import { Button, EmptyState, Field, Spinner, Textarea, fmtDate } from "../components/ui.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
 import { buildBrandThemeVars } from "../brandTheme.js";
 
 function RatingInput({ label, value, onChange }) {
+  const { t } = useLanguage();
   const values = Array.from({ length: 10 }, (_, index) => (index + 1) / 2);
 
   return (
@@ -17,7 +19,7 @@ function RatingInput({ label, value, onChange }) {
             className={item <= value ? "active" : ""}
             onClick={() => onChange(item)}
             title={`${item} / 5`}
-            aria-label={`${item} من 5`}
+            aria-label={t("review.outOf5", { n: item })}
           >
             {item % 1 === 0 ? "★" : "☆"}
           </button>
@@ -30,6 +32,7 @@ function RatingInput({ label, value, onChange }) {
 
 export default function PublicReview() {
   const { token } = useParams();
+  const { t } = useLanguage();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -64,7 +67,7 @@ export default function PublicReview() {
   if (error && !data) {
     return (
       <ReviewCenter>
-        <EmptyState title="تعذر فتح رابط التقييم" hint={error} />
+        <EmptyState title={t("review.cantOpen")} hint={error} />
       </ReviewCenter>
     );
   }
@@ -80,7 +83,7 @@ export default function PublicReview() {
         <ReviewCenter>
           <div className="review-card">
             <img className="review-logo" src={business.logoUrl || "/oh-tech-logo.jpg"} alt={business.name} />
-            <EmptyState title="شكرًا لكم" hint="تم استلام تقييمكم بنجاح." />
+            <EmptyState title={t("review.thanks")} hint={t("review.received")} />
           </div>
         </ReviewCenter>
       </div>
@@ -92,23 +95,23 @@ export default function PublicReview() {
       <ReviewCenter>
         <form className="review-card" onSubmit={submit}>
           <img className="review-logo" src={business.logoUrl || "/oh-tech-logo.jpg"} alt={business.name} />
-          <div className="review-title">تقييم التجربة</div>
+          <div className="review-title">{t("review.title")}</div>
           <div className="review-sub">
             {business.name} - {appointment.service} - {appointment.employee}
             <br />
             {fmtDate(appointment.startAt)}
           </div>
 
-          <RatingInput label="تقييم الخدمة" value={form.serviceRating} onChange={(serviceRating) => setForm((f) => ({ ...f, serviceRating }))} />
-          <RatingInput label="تقييم العامل" value={form.employeeRating} onChange={(employeeRating) => setForm((f) => ({ ...f, employeeRating }))} />
-          <RatingInput label="تقييم المحل" value={form.businessRating} onChange={(businessRating) => setForm((f) => ({ ...f, businessRating }))} />
+          <RatingInput label={t("review.serviceRating")} value={form.serviceRating} onChange={(serviceRating) => setForm((f) => ({ ...f, serviceRating }))} />
+          <RatingInput label={t("review.employeeRating")} value={form.employeeRating} onChange={(employeeRating) => setForm((f) => ({ ...f, employeeRating }))} />
+          <RatingInput label={t("review.businessRating")} value={form.businessRating} onChange={(businessRating) => setForm((f) => ({ ...f, businessRating }))} />
 
-          <Field label="تعليق اختياري">
+          <Field label={t("review.optionalComment")}>
             <Textarea rows="4" value={form.comment} onChange={(event) => setForm((f) => ({ ...f, comment: event.target.value }))} />
           </Field>
 
           {error && <div className="error-text">{error}</div>}
-          <Button type="submit" size="lg" block loading={saving}>إرسال التقييم</Button>
+          <Button type="submit" size="lg" block loading={saving}>{t("review.submit")}</Button>
         </form>
       </ReviewCenter>
     </div>

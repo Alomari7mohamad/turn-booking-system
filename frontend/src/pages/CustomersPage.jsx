@@ -16,6 +16,7 @@ import {
   PAYMENT_STATUS_META,
   STATUS_META,
 } from "../components/ui.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
 function monthInput(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -29,10 +30,10 @@ function averageReview(review) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function Stars({ value }) {
+function Stars({ value, t }) {
   const rounded = Math.round(Number(value || 0) * 2) / 2;
   return (
-    <span className="rating-stars" aria-label={`${rounded} من 5`}>
+    <span className="rating-stars" aria-label={t("review.outOf5", { n: rounded })}>
       {Array.from({ length: 5 }).map((_, index) => {
         const starValue = index + 1;
         return (
@@ -48,6 +49,7 @@ function Stars({ value }) {
 export default function CustomersPage() {
   const { api, isAdminManaging } = useBusinessManage();
   const toast = useToast();
+  const { t } = useLanguage();
   const [data, setData] = useState(null);
   const [month, setMonth] = useState(monthInput());
   const [pointsPercent, setPointsPercent] = useState(0);
@@ -91,7 +93,7 @@ export default function CustomersPage() {
     setSaving(true);
     try {
       await api.updateCustomerSettings({ customerPointsPercent: Number(pointsPercent || 0) });
-      toast.success("تم حفظ نسبة النقاط");
+      toast.success(t("cust.pointsSaved"));
       load();
     } catch (err) {
       toast.error(err.message);
@@ -133,8 +135,8 @@ export default function CustomersPage() {
   if (!data.enabled) {
     return (
       <EmptyState
-        title="مجمع الزبائن غير مفعل لهذا المحل"
-        hint="يمكن لصاحب المحل تفعيل مجمع الزبائن من إعدادات المحل."
+        title={t("cust.notEnabled")}
+        hint={t("cust.notEnabledHint")}
       />
     );
   }
@@ -145,40 +147,40 @@ export default function CustomersPage() {
     <div data-no-auto-translate="true">
       <div className="page-head">
         <div>
-          <div className="page-title">الزبائن</div>
-          <div className="page-sub">متابعة زيارات الزبائن، المدفوعات، النقاط، وتفاصيل الحجوزات.</div>
+          <div className="page-title">{t("navCustomers")}</div>
+          <div className="page-sub">{t("cust.sub")}</div>
         </div>
       </div>
 
       <div className="customer-summary-grid">
         <div className="card card-pad">
-          <span className="soft">إجمالي الزبائن</span>
+          <span className="soft">{t("cust.totalCustomers")}</span>
           <strong>{fmtNumber(summary.customers)}</strong>
         </div>
         <div className="card card-pad">
-          <span className="soft">زيارات الشهر</span>
+          <span className="soft">{t("cust.monthVisits")}</span>
           <strong>{fmtNumber(summary.monthlyVisits)}</strong>
         </div>
         <div className="card card-pad">
-          <span className="soft">مدفوعات الشهر</span>
+          <span className="soft">{t("cust.monthPaid")}</span>
           <strong>{fmtPrice(summary.monthlyPaid)}</strong>
         </div>
         <div className="card card-pad">
-          <span className="soft">مجموع النقاط</span>
+          <span className="soft">{t("cust.totalPoints")}</span>
           <strong>{fmtNumber(summary.points)}</strong>
         </div>
       </div>
 
       <div className="card card-pad mt-3">
         <div className="customers-toolbar">
-          <Field label="الشهر">
+          <Field label={t("cust.month")}>
             <Input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
           </Field>
-          <Field label="بحث">
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="اسم، هاتف، بريد..." />
+          <Field label={t("search")}>
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("cust.searchPlaceholder")} />
           </Field>
           <form onSubmit={saveSettings} className="customers-points-form">
-            <Field label="نسبة النقاط من قيمة الدفع">
+            <Field label={t("cust.pointsPercent")}>
               <div className="row customer-points-row">
                 <Input
                   type="number"
@@ -189,7 +191,7 @@ export default function CustomersPage() {
                   onChange={(event) => setPointsPercent(event.target.value)}
                 />
                 <span className="soft">%</span>
-                <Button type="submit" size="sm" loading={saving}>حفظ</Button>
+                <Button type="submit" size="sm" loading={saving}>{t("save")}</Button>
               </div>
             </Field>
           </form>
@@ -202,15 +204,15 @@ export default function CustomersPage() {
             <table>
               <thead>
                 <tr>
-                  <th>الزبون</th>
-                  <th>الهاتف</th>
-                  <th>زيارات الشهر</th>
-                  <th>مدفوعات الشهر</th>
-                  <th>كل الزيارات</th>
-                  <th>كل المدفوعات</th>
-                  <th>النقاط</th>
-                  <th>آخر زيارة</th>
-                  <th>إجراءات</th>
+                  <th>{t("customer")}</th>
+                  <th>{t("phone")}</th>
+                  <th>{t("cust.monthVisits")}</th>
+                  <th>{t("cust.monthPaid")}</th>
+                  <th>{t("cust.allVisits")}</th>
+                  <th>{t("cust.allPaid")}</th>
+                  <th>{t("cust.points")}</th>
+                  <th>{t("cust.lastVisit")}</th>
+                  <th>{t("actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -230,9 +232,9 @@ export default function CustomersPage() {
                     <td>
                       <div className="row wrap" style={{ gap: 6 }}>
                         {!isAdminManaging && (
-                          <Button size="sm" variant="secondary" onClick={() => openDetails(customer)}>تفاصيل الزبون</Button>
+                          <Button size="sm" variant="secondary" onClick={() => openDetails(customer)}>{t("cust.customerDetails")}</Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => openReviews(customer)}>رؤية التقييمات</Button>
+                        <Button size="sm" variant="ghost" onClick={() => openReviews(customer)}>{t("cust.viewReviews")}</Button>
                       </div>
                     </td>
                   </tr>
@@ -241,15 +243,15 @@ export default function CustomersPage() {
             </table>
           </div>
         ) : (
-          <EmptyState title="لا يوجد زبائن" hint="سيظهر كل شخص يقوم بحجز دور هنا تلقائيًا." />
+          <EmptyState title={t("cust.noCustomers")} hint={t("cust.noCustomersHint")} />
         )}
       </div>
 
       <Modal
         open={!!reviewsTarget}
         onClose={() => setReviewsTarget(null)}
-        title={reviewsTarget ? `تقييمات ${reviewsTarget.name}` : "التقييمات"}
-        footer={<Button variant="ghost" onClick={() => setReviewsTarget(null)}>إغلاق</Button>}
+        title={reviewsTarget ? t("cust.reviewsOf", { name: reviewsTarget.name }) : t("cust.reviews")}
+        footer={<Button variant="ghost" onClick={() => setReviewsTarget(null)}>{t("close")}</Button>}
       >
         {!reviews ? <Spinner /> : reviews.length ? (
           <div className="col" style={{ gap: 12 }}>
@@ -257,62 +259,62 @@ export default function CustomersPage() {
               <div key={review.id} className="card card-pad" style={{ boxShadow: "none" }}>
                 <div className="row-between">
                   <strong>{review.service?.name || "-"}</strong>
-                  <Stars value={averageReview(review)} />
+                  <Stars value={averageReview(review)} t={t} />
                 </div>
                 <div className="soft mt-1" style={{ fontSize: 13 }}>
                   {review.employee?.name || "-"} · {review.appointment?.startAt ? fmtDate(review.appointment.startAt) : fmtDate(review.createdAt)}
                 </div>
                 <div className="row wrap mt-2" style={{ gap: 8 }}>
-                  <Badge tone="info">الخدمة {review.serviceRating}/5</Badge>
-                  <Badge tone="success">العامل {review.employeeRating}/5</Badge>
-                  <Badge tone="warning">المحل {review.businessRating}/5</Badge>
+                  <Badge tone="info">{t("service")} {review.serviceRating}/5</Badge>
+                  <Badge tone="success">{t("employee")} {review.employeeRating}/5</Badge>
+                  <Badge tone="warning">{t("business")} {review.businessRating}/5</Badge>
                 </div>
                 {review.comment && <p className="mt-2" style={{ marginBottom: 0 }}>{review.comment}</p>}
               </div>
             ))}
           </div>
         ) : (
-          <EmptyState title="لا توجد تقييمات لهذا الزبون" />
+          <EmptyState title={t("cust.noReviews")} />
         )}
       </Modal>
 
       <Modal
         open={!!detailsTarget}
         onClose={() => setDetailsTarget(null)}
-        title={detailsTarget ? `تفاصيل الزبون - ${detailsTarget.name}` : "تفاصيل الزبون"}
-        footer={<Button variant="ghost" onClick={() => setDetailsTarget(null)}>إغلاق</Button>}
+        title={detailsTarget ? t("cust.customerDetailsName", { name: detailsTarget.name }) : t("cust.customerDetails")}
+        footer={<Button variant="ghost" onClick={() => setDetailsTarget(null)}>{t("close")}</Button>}
       >
         <div className="row wrap" style={{ gap: 10, marginBottom: 14 }}>
-          <Field label="من تاريخ">
+          <Field label={t("cust.fromDate")}>
             <Input type="date" value={detailsFrom} onChange={(event) => setDetailsFrom(event.target.value)} />
           </Field>
-          <Field label="إلى تاريخ">
+          <Field label={t("cust.toDate")}>
             <Input type="date" value={detailsTo} onChange={(event) => setDetailsTo(event.target.value)} />
           </Field>
           <Button type="button" variant="secondary" onClick={() => detailsTarget && openDetails(detailsTarget)} style={{ alignSelf: "end" }}>
-            عرض
+            {t("cust.show")}
           </Button>
         </div>
         {!details ? <Spinner /> : (
           <div className="col" style={{ gap: 14 }}>
             <div className="grid grid-stats">
-              <div className="card card-pad"><span className="soft">عدد الحجوزات</span><strong>{fmtNumber(details.summary?.appointments)}</strong></div>
-              <div className="card card-pad"><span className="soft">إجمالي الدفع</span><strong>{fmtPrice(details.summary?.paid)}</strong></div>
-              <div className="card card-pad"><span className="soft">لم يحضر</span><strong>{fmtNumber(details.summary?.noShow)}</strong></div>
-              <div className="card card-pad"><span className="soft">مرفوضة</span><strong>{fmtNumber(details.summary?.cancelled)}</strong></div>
+              <div className="card card-pad"><span className="soft">{t("cust.bookingsCount")}</span><strong>{fmtNumber(details.summary?.appointments)}</strong></div>
+              <div className="card card-pad"><span className="soft">{t("cust.totalPaidLabel")}</span><strong>{fmtPrice(details.summary?.paid)}</strong></div>
+              <div className="card card-pad"><span className="soft">{t("statusNoShow")}</span><strong>{fmtNumber(details.summary?.noShow)}</strong></div>
+              <div className="card card-pad"><span className="soft">{t("cust.rejectedCount")}</span><strong>{fmtNumber(details.summary?.cancelled)}</strong></div>
             </div>
             {details.appointments?.length ? (
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>الدور</th>
-                      <th>الخدمة</th>
-                      <th>العامل</th>
-                      <th>التاريخ</th>
-                      <th>المبلغ</th>
-                      <th>الحالة</th>
-                      <th>الدفع</th>
+                      <th>{t("cust.turn")}</th>
+                      <th>{t("service")}</th>
+                      <th>{t("employee")}</th>
+                      <th>{t("date")}</th>
+                      <th>{t("sd.amount")}</th>
+                      <th>{t("status")}</th>
+                      <th>{t("ap.payment")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -331,7 +333,7 @@ export default function CustomersPage() {
                 </table>
               </div>
             ) : (
-              <EmptyState title="لا توجد حجوزات ضمن الفترة المختارة" />
+              <EmptyState title={t("cust.noBookingsInRange")} />
             )}
           </div>
         )}

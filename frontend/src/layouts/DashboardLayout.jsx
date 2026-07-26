@@ -7,6 +7,7 @@ import { BellIcon, NavIcon } from "../components/Icons.jsx";
 import { adminFavicon, setFavicon } from "../favicon.js";
 import { applyBrandTheme, resetBrandTheme } from "../brandTheme.js";
 import { businessApi } from "../api/endpoints.js";
+import i18n from "../i18n/index.js";
 
 const NAV = {
   SUPER_ADMIN: [
@@ -63,9 +64,9 @@ const mojibakePattern = /[ן¢׳´׳³׳’ֲֲֲ׳ ]/;
 function cleanNotificationMessage(item) {
   const message = item?.message || "";
   if (message && !mojibakePattern.test(message)) return message;
-  if (item?.type === "NEW_APPOINTMENT") return "وصل حجز جديد إلى النظام";
-  if (item?.type === "CUSTOMER") return "تحديث على حالة الحجز";
-  return "إشعار من النظام";
+  if (item?.type === "NEW_APPOINTMENT") return i18n.t("dl.notifNewAppointment");
+  if (item?.type === "CUSTOMER") return i18n.t("dl.notifCustomer");
+  return i18n.t("dl.notifSystem");
 }
 
 function getAudioContext(audioContextRef) {
@@ -149,7 +150,7 @@ export function DashboardLayout() {
   const staffJobTitle = user?.employeeProfile?.title?.trim();
   const roleLabel =
     user?.role === "STAFF"
-      ? staffJobTitle || (user?.staffRole === "SECRETARY" ? "قسم سكرتارية" : "مقدم خدمة")
+      ? staffJobTitle || (user?.staffRole === "SECRETARY" ? t("emp.secretaryDept") : t("pb.serviceProvider"))
       : t(roleKey);
 
   useEffect(() => {

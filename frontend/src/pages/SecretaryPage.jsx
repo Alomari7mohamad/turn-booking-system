@@ -5,125 +5,6 @@ import { LanguageSwitcher } from "../components/GlobalControls.jsx";
 import { useToast } from "../components/Toast.jsx";
 import { Badge, Button, EmptyState, Field, Input, Select, Spinner, fmtDate, fmtPrice, fmtTime, PAYMENT_STATUS_META, STATUS_META } from "../components/ui.jsx";
 
-const cleanCopy = {
-  ar: {
-    title: "صفحة السكرتيرة",
-    sub: "إدارة أدوار اليوم، الدفع، القبول والرفض، وطباعة أوراق الدخول",
-    loginTitle: "دخول السكرتيرة",
-    loginSub: "أدخل الرقم السري للسكرتير/ة أو كلمة مرور المدير لفتح الصفحة",
-    pin: "الرقم السري",
-    open: "دخول",
-    insideNow: "داخل الصفحة الآن",
-    printSchedule: "طباعة جدول اليوم",
-    noTurnsToPrint: "لا توجد أدوار اليوم لطباعتها",
-    allToday: "كل أدوار اليوم",
-    pending: "بانتظار التأكيد",
-    confirmed: "مؤكدة",
-    paidFree: "مدفوعة/مجانية",
-    todayAccounts: "حسابات اليوم",
-    paidToday: "مدفوع اليوم",
-    pendingToday: "غير مدفوع اليوم",
-    allEmployees: "كل العاملين",
-    refresh: "تحديث",
-    time: "الوقت",
-    customer: "الزبون",
-    employee: "العامل",
-    service: "الخدمة",
-    status: "الحالة",
-    payment: "الدفع",
-    actions: "إجراءات السكرتيرة",
-    accept: "قبول",
-    reject: "رفض",
-    collectPayment: "استلام الدفع",
-    paymentLocked: "يتم استلام الدفع من صفحة الدفع فقط",
-    lateTicket: "فحص وطباعة متأخر",
-    free: "مجانية",
-    noTurns: "لا توجد أدوار اليوم",
-    noTurnsHint: "ستظهر هنا أدوار اليوم لكل العاملين أو حسب العامل المختار",
-    scheduleTitle: "جدول أدوار اليوم",
-    appointment: "الموعد",
-    amount: "المبلغ",
-    freeService: "الخدمة مجانية",
-    lateEntry: "دخول متأخر",
-    bookingNumber: "رقم الحجز اليومي",
-    queueNumber: "رقم الدور",
-    priority: "الأولوية حسب وقت الموعد في جدول اليوم، وليس وقت سحب الورقة",
-    nextBySchedule: "أنت التالي حسب جدول اليوم",
-    ahead: "قبلك",
-    inTodaySchedule: "في جدول اليوم",
-    accepted: "تم قبول الدور",
-    rejected: "تم رفض الدور",
-    paymentReceived: "تم استلام الدفع وتغيير الحالة إلى مدفوع",
-    lateIssued: "تم فحص توفر العامل وإصدار ورقة الدخول المتأخر",
-    wrongPin: "تعذر فتح صفحة السكرتيرة",
-    paid: "مدفوع",
-    unpaid: "غير مدفوع",
-    failed: "فشل الدفع",
-    refunded: "مسترجع",
-    cancelled: "مرفوض",
-    completed: "مكتمل",
-    noShow: "لم يحضر",
-  },
-  he: {
-    title: "עמדת מזכירות",
-    sub: "ניהול תורי היום, תשלום, אישור ודחייה, והדפסת פתקים",
-    loginTitle: "כניסת מזכירות",
-    loginSub: "הכניסו קוד מזכירות או סיסמת מנהל כדי לפתוח את העמוד",
-    pin: "קוד כניסה",
-    open: "כניסה",
-    insideNow: "מחובר עכשיו",
-    printSchedule: "הדפסת תורי היום",
-    noTurnsToPrint: "אין תורים להדפסה היום",
-    allToday: "כל תורי היום",
-    pending: "ממתינים לאישור",
-    confirmed: "מאושרים",
-    paidFree: "שולם/חינם",
-    todayAccounts: "חשבונות היום",
-    paidToday: "שולם היום",
-    pendingToday: "לא שולם היום",
-    allEmployees: "כל העובדים",
-    refresh: "רענון",
-    time: "שעה",
-    customer: "לקוח",
-    employee: "עובד",
-    service: "שירות",
-    status: "סטטוס",
-    payment: "תשלום",
-    actions: "פעולות מזכירות",
-    accept: "אישור",
-    reject: "דחייה",
-    collectPayment: "קבלת תשלום",
-    paymentLocked: "קבלת תשלום מתבצעת רק בעמוד התשלום",
-    lateTicket: "בדיקה והדפסת מאחר",
-    free: "חינם",
-    noTurns: "אין תורים היום",
-    noTurnsHint: "כאן יופיעו תורי היום לכל העובדים או לעובד שנבחר",
-    scheduleTitle: "לוח תורי היום",
-    appointment: "תור",
-    amount: "סכום",
-    freeService: "השירות בחינם",
-    lateEntry: "כניסת מאחר",
-    bookingNumber: "מספר הזמנה יומי",
-    queueNumber: "מספר תור",
-    priority: "הקדימות לפי שעת התור בלוח היום, לא לפי זמן הדפסת הפתק",
-    nextBySchedule: "אתם הבאים לפי לוח היום",
-    ahead: "לפניך",
-    inTodaySchedule: "בלוח היום",
-    accepted: "התור אושר",
-    rejected: "התור נדחה",
-    paymentReceived: "התשלום התקבל והסטטוס עודכן לשולם",
-    lateIssued: "נבדקה זמינות העובד והודפס פתק מאחר",
-    wrongPin: "לא ניתן לפתוח את עמדת המזכירות",
-    paid: "שולם",
-    unpaid: "לא שולם",
-    failed: "תשלום נכשל",
-    refunded: "הוחזר",
-    cancelled: "נדחה",
-    completed: "הושלם",
-    noShow: "לא הגיע",
-  },
-};
-
 function statusLabel(status, c) {
   return {
     PENDING: c.pending,
@@ -158,8 +39,8 @@ function sessionKey(basePath) {
 
 export default function SecretaryPage() {
   const toast = useToast();
-  const { language } = useLanguage();
-  const c = cleanCopy[language] || cleanCopy.ar;
+  const { t } = useLanguage();
+  const c = new Proxy({}, { get: (_, key) => t("sec." + key) });
   const { api, basePath } = useBusinessManage();
   const [data, setData] = useState(null);
   const [employeeId, setEmployeeId] = useState("");
@@ -207,6 +88,7 @@ export default function SecretaryPage() {
 
   const appointments = data?.appointments || [];
   const employees = data?.employees || [];
+  const manualApproval = data?.business?.requiresAppointmentApproval !== false;
   const confirmed = appointments.filter((item) => item.status === "CONFIRMED");
   const pending = appointments.filter((item) => item.status === "PENDING");
 
@@ -276,7 +158,7 @@ export default function SecretaryPage() {
       <div className="page-head">
         <div>
           <div className="page-title">{c.title}</div>
-          <div className="page-sub">{c.sub}</div>
+          <div className="page-sub">{manualApproval ? c.sub : c.subAuto}</div>
           <div className="soft" style={{ marginTop: 8 }}>{c.insideNow}: <strong>{actor.name}</strong></div>
         </div>
         <div className="row wrap" style={{ gap: 10 }}>
@@ -299,7 +181,7 @@ export default function SecretaryPage() {
 
       <div className="grid grid-stats secretary-stats">
         <div className="card card-pad"><div className="soft">{c.allToday}</div><strong>{stats.all}</strong></div>
-        <div className="card card-pad"><div className="soft">{c.pending}</div><strong>{stats.pending}</strong></div>
+        {manualApproval && <div className="card card-pad"><div className="soft">{c.pending}</div><strong>{stats.pending}</strong></div>}
         <div className="card card-pad"><div className="soft">{c.confirmed}</div><strong>{stats.confirmed}</strong></div>
         <div className="card card-pad"><div className="soft">{c.paidFree}</div><strong>{stats.paid}</strong></div>
       </div>
@@ -345,7 +227,7 @@ export default function SecretaryPage() {
                       <td>{rejected ? <span className="soft">-</span> : <Badge tone={paid ? "success" : PAYMENT_STATUS_META[appointment.paymentStatus]?.tone}>{paymentLabel(appointment.paymentStatus, free, c)}</Badge>}</td>
                       <td>
                         <div className="row wrap" style={{ gap: 6 }}>
-                          {appointment.status === "PENDING" && (
+                          {manualApproval && appointment.status === "PENDING" && (
                             <>
                               <Button size="sm" onClick={() => updateStatus(appointment, "CONFIRMED")}>{c.accept}</Button>
                               <Button size="sm" variant="danger" onClick={() => updateStatus(appointment, "CANCELLED")}>{c.reject}</Button>

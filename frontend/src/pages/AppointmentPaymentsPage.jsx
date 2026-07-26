@@ -15,6 +15,7 @@ import {
   PAYMENT_STATUS_META,
   STATUS_META,
 } from "../components/ui.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
 function todayRange() {
   const today = new Date().toISOString().slice(0, 10);
@@ -28,6 +29,7 @@ function paymentAmount(appointment) {
 export default function AppointmentPaymentsPage() {
   const { api } = useBusinessManage();
   const toast = useToast();
+  const { t } = useLanguage();
   const [appointments, setAppointments] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [filters, setFilters] = useState({ ...todayRange(), employeeId: "", paymentStatus: "" });
@@ -60,7 +62,7 @@ export default function AppointmentPaymentsPage() {
     setSavingId(appointment.id);
     try {
       await api.updateAppointmentPayment(appointment.id, nextStatus);
-      toast.success("تم تحديث حالة الدفع");
+      toast.success(t("appPay.paymentUpdated"));
       load();
     } catch (err) {
       toast.error(err.message);
@@ -75,8 +77,8 @@ export default function AppointmentPaymentsPage() {
     <div>
       <div className="page-head">
         <div>
-          <div className="page-title">الدفع</div>
-          <div className="page-sub">هذه الصفحة مخصصة فقط لاستلام الدفع وتحديث حالته.</div>
+          <div className="page-title">{t("navAppointmentPayments")}</div>
+          <div className="page-sub">{t("appPay.sub")}</div>
         </div>
       </div>
 
@@ -88,17 +90,17 @@ export default function AppointmentPaymentsPage() {
           </div>
           <div className="appointments-filter-select" style={{ minWidth: 180 }}>
             <Select value={filters.employeeId} onChange={(event) => setFilters((current) => ({ ...current, employeeId: event.target.value }))}>
-              <option value="">كل العاملين</option>
+              <option value="">{t("sd.allStaff")}</option>
               {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
             </Select>
           </div>
           <div className="appointments-filter-select" style={{ minWidth: 160 }}>
             <Select value={filters.paymentStatus} onChange={(event) => setFilters((current) => ({ ...current, paymentStatus: event.target.value }))}>
-              <option value="">كل حالات الدفع</option>
+              <option value="">{t("ap.allPayStatuses")}</option>
               {Object.entries(PAYMENT_STATUS_META).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
             </Select>
           </div>
-          <Button variant="ghost" onClick={() => setFilters({ ...todayRange(), employeeId: "", paymentStatus: "" })}>اليوم</Button>
+          <Button variant="ghost" onClick={() => setFilters({ ...todayRange(), employeeId: "", paymentStatus: "" })}>{t("sd.today")}</Button>
         </div>
       </div>
 
@@ -108,15 +110,15 @@ export default function AppointmentPaymentsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>الزبون</th>
-                  <th>الخدمة</th>
-                  <th>العامل</th>
-                  <th>الموعد</th>
-                  <th>حالة الحجز</th>
-                  <th>المبلغ</th>
-                  <th>طريقة الدفع</th>
-                  <th>حالة الدفع</th>
-                  <th>إجراء الدفع</th>
+                  <th>{t("customer")}</th>
+                  <th>{t("service")}</th>
+                  <th>{t("employee")}</th>
+                  <th>{t("sd.appointment")}</th>
+                  <th>{t("appPay.bookingStatus")}</th>
+                  <th>{t("sd.amount")}</th>
+                  <th>{t("paymentMethod")}</th>
+                  <th>{t("bc.paymentStatus")}</th>
+                  <th>{t("appPay.payAction")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -138,20 +140,20 @@ export default function AppointmentPaymentsPage() {
                         <div className="soft" style={{ fontSize: 12 }}>{fmtTime(appointment.startAt)} - {fmtTime(appointment.endAt)}</div>
                       </td>
                       <td><Badge tone={STATUS_META[appointment.status]?.tone}>{STATUS_META[appointment.status]?.label || appointment.status}</Badge></td>
-                      <td>{isFree ? <Badge tone="success">الخدمة مجانية</Badge> : fmtPrice(amount)}</td>
+                      <td>{isFree ? <Badge tone="success">{t("bc.freeService")}</Badge> : fmtPrice(amount)}</td>
                       <td>{isFree ? "-" : (PAYMENT_METHOD_META[appointment.paymentMethod]?.label || "-")}</td>
-                      <td><Badge tone={PAYMENT_STATUS_META[appointment.paymentStatus]?.tone}>{isFree ? "الخدمة مجانية" : PAYMENT_STATUS_META[appointment.paymentStatus]?.label}</Badge></td>
+                      <td><Badge tone={PAYMENT_STATUS_META[appointment.paymentStatus]?.tone}>{isFree ? t("bc.freeService") : PAYMENT_STATUS_META[appointment.paymentStatus]?.label}</Badge></td>
                       <td>
                         {isFree ? (
-                          <span className="soft">لا يوجد دفع</span>
+                          <span className="soft">{t("appPay.noPayment")}</span>
                         ) : canChange ? (
-                          <Button size="sm" loading={savingId === appointment.id} onClick={() => changePayment(appointment, "PAID")}>استلام الدفع</Button>
+                          <Button size="sm" loading={savingId === appointment.id} onClick={() => changePayment(appointment, "PAID")}>{t("appPay.receivePayment")}</Button>
                         ) : isPaid ? (
-                          <Badge tone="success">مدفوع</Badge>
+                          <Badge tone="success">{t("payStatusPaid")}</Badge>
                         ) : appointment.paymentMethod === "ONLINE" ? (
-                          <span className="soft">يتحدث من بوابة الدفع</span>
+                          <span className="soft">{t("appPay.viaGateway")}</span>
                         ) : (
-                          <span className="soft">غير قابل للتعديل</span>
+                          <span className="soft">{t("appPay.notEditable")}</span>
                         )}
                       </td>
                     </tr>
@@ -161,7 +163,7 @@ export default function AppointmentPaymentsPage() {
             </table>
           </div>
         ) : (
-          <EmptyState title="لا توجد حجوزات للدفع" hint="يمكن تغيير نطاق التاريخ أو حالة الدفع." />
+          <EmptyState title={t("appPay.noBookings")} hint={t("appPay.noBookingsHint")} />
         )}
       </div>
     </div>

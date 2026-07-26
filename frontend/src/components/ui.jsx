@@ -1,4 +1,6 @@
-﻿export function Spinner({ page }) {
+﻿import i18n from "../i18n/index.js";
+
+export function Spinner({ page }) {
   if (page) {
     return (
       <div className="spinner-page">
@@ -102,24 +104,27 @@ export const fmtDate = (d) => {
 export const fmtTime = (d) =>
   new Date(d).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
+// Enum -> display metadata. The technical keys (PENDING, ONLINE, ...) are the
+// stable application values; the `label` is a getter that returns the label in
+// the currently active language, so consumers reading `.label` stay unchanged.
 export const STATUS_META = {
-  PENDING: { label: "بانتظار التأكيد", tone: "warning" },
-  CONFIRMED: { label: "مؤكد", tone: "info" },
-  COMPLETED: { label: "مكتمل", tone: "success" },
-  CANCELLED: { label: "مرفوض", tone: "danger" },
-  NO_SHOW: { label: "لم يحضر", tone: "muted" },
-  ARCHIVED: { label: "مؤرشف", tone: "muted" },
+  PENDING: { get label() { return i18n.t("statusPending"); }, tone: "warning" },
+  CONFIRMED: { get label() { return i18n.t("statusConfirmed"); }, tone: "info" },
+  COMPLETED: { get label() { return i18n.t("statusCompleted"); }, tone: "success" },
+  CANCELLED: { get label() { return i18n.t("statusCancelled"); }, tone: "danger" },
+  NO_SHOW: { get label() { return i18n.t("statusNoShow"); }, tone: "muted" },
+  ARCHIVED: { get label() { return i18n.t("statusArchived"); }, tone: "muted" },
 };
 
 export const PAYMENT_STATUS_META = {
-  PENDING: { label: "بانتظار الدفع", tone: "warning" },
-  PAID: { label: "مدفوع", tone: "success" },
-  FAILED: { label: "فشل الدفع", tone: "danger" },
-  REFUNDED: { label: "مسترجع", tone: "muted" },
+  PENDING: { get label() { return i18n.t("payStatusPending"); }, tone: "warning" },
+  PAID: { get label() { return i18n.t("payStatusPaid"); }, tone: "success" },
+  FAILED: { get label() { return i18n.t("payStatusFailed"); }, tone: "danger" },
+  REFUNDED: { get label() { return i18n.t("payStatusRefunded"); }, tone: "muted" },
 };
 
 export const PAYMENT_METHOD_META = {
-  ONLINE: { label: "دفع إلكتروني", icon: "" },
-  PAY_AT_STORE: { label: "دفع في المحل", icon: "" },
+  ONLINE: { get label() { return i18n.t("payMethodOnline"); }, icon: "" },
+  PAY_AT_STORE: { get label() { return i18n.t("payMethodStore"); }, icon: "" },
 };
 

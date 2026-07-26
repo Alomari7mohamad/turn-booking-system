@@ -2,27 +2,29 @@
 import { NavLink, Outlet, useParams } from "react-router-dom";
 import { adminApi, adminManagedBusinessApi } from "../api/endpoints.js";
 import { BusinessManageProvider } from "../context/BusinessManageContext.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
 import { Spinner, EmptyState } from "../components/ui.jsx";
 
 const TABS = [
-  { to: "", label: "لوحة المحل", end: true },
-  { to: "statistics", label: "الإحصائيات" },
-  { to: "customers", label: "الزبائن" },
-  { to: "appointments", label: "الحجوزات" },
-  { to: "appointments/manage", label: "إدارة الحجوزات" },
-  { to: "appointments/rejected", label: "الحجوزات التي تم رفضها" },
-  { to: "services", label: "الخدمات" },
-  { to: "employees", label: "العاملون" },
-  { to: "secretary", label: "السكرتارية" },
-  { to: "accounts", label: "قسم الحسابات والفواتير" },
-  { to: "working-hours", label: "ساعات العمل" },
-  { to: "settings", label: "الإعدادات" },
-  { to: "subscription", label: "الاشتراك" },
-  { to: "activity", label: "سجل النشاط" },
+  { to: "", key: "abc.storeDashboard", end: true },
+  { to: "statistics", key: "navStatistics" },
+  { to: "customers", key: "navCustomers" },
+  { to: "appointments", key: "navAppointments" },
+  { to: "appointments/manage", key: "navAppointmentsManagement" },
+  { to: "appointments/rejected", key: "navRejectedAppointments" },
+  { to: "services", key: "navServices" },
+  { to: "employees", key: "navEmployees" },
+  { to: "secretary", key: "navSecretary" },
+  { to: "accounts", key: "navAccounts" },
+  { to: "working-hours", key: "navWorkingHours" },
+  { to: "settings", key: "abc.settings" },
+  { to: "subscription", key: "navSubscription" },
+  { to: "activity", key: "navActivity" },
 ];
 
 export default function AdminBusinessControl() {
   const { businessId } = useParams();
+  const { t } = useLanguage();
   const [business, setBusiness] = useState(null);
   const [error, setError] = useState(false);
 
@@ -33,15 +35,15 @@ export default function AdminBusinessControl() {
   const api = useMemo(() => adminManagedBusinessApi(businessId), [businessId]);
   const basePath = `/admin/businesses/${businessId}/control`;
 
-  if (error) return <EmptyState icon="▣" title="تعذر فتح المحل" hint="تحقق من أن المحل موجود ثم حاول مرة أخرى" />;
+  if (error) return <EmptyState icon="▣" title={t("abc.cantOpen")} hint={t("abc.cantOpenHint")} />;
   if (!business) return <Spinner page />;
 
   return (
     <BusinessManageProvider value={{ api, basePath, business, isAdminManaging: true }}>
       <div className="page-head">
         <div>
-          <div className="page-title">تحكم عن بعد: {business.name}</div>
-          <div className="page-sub">إدارة كاملة لمساعدة صاحب المحل عند الحاجة</div>
+          <div className="page-title">{t("abc.remoteControl", { name: business.name })}</div>
+          <div className="page-sub">{t("abc.sub")}</div>
         </div>
       </div>
 
@@ -49,12 +51,12 @@ export default function AdminBusinessControl() {
         <div className="row wrap" style={{ gap: 8 }}>
           {TABS.map((tab) => (
             <NavLink
-              key={tab.label}
+              key={tab.key}
               to={tab.to}
               end={tab.end}
               className={({ isActive }) => `btn btn-sm ${isActive ? "btn-primary" : "btn-ghost"}`}
             >
-              {tab.label}
+              {t(tab.key)}
             </NavLink>
           ))}
         </div>

@@ -143,8 +143,8 @@ export default function ManagersManagement() {
                 type="button"
                 className="password-toggle"
                 onClick={() => setShowPassword((value) => !value)}
-                aria-label={showPassword ? "إخفاء كلمة السر" : "إظهار كلمة السر"}
-                title={showPassword ? "إخفاء كلمة السر" : "إظهار كلمة السر"}
+                aria-label={showPassword ? t("hidePassword") : t("showPassword")}
+                title={showPassword ? t("hidePassword") : t("showPassword")}
               >
                 <PasswordEye visible={showPassword} />
               </button>

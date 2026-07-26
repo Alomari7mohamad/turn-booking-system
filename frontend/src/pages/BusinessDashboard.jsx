@@ -28,7 +28,7 @@ export default function BusinessDashboard() {
       setCopied(key);
       setTimeout(() => setCopied((current) => (current === key ? "" : current)), 3000);
     } catch {
-      toast.error("تعذر نسخ الرابط");
+      toast.error(t("bd.copyFailed"));
     }
   };
 
@@ -79,12 +79,12 @@ export default function BusinessDashboard() {
               <a className="btn btn-ghost btn-sm" href={bookingUrl} target="_blank" rel="noreferrer">{t("open")}</a>
             </div>
           </div>
-          {copied === "booking" && <div className="copy-inline-message">تم نسخ رابط الحجز</div>}
+          {copied === "booking" && <div className="copy-inline-message">{t("bd.bookingLinkCopied")}</div>}
           {printUrl && (
             <div className="row-between wrap" style={{ gap: 14, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--primary-soft-2)" }}>
               <div>
-                <div style={{ fontWeight: 700 }}>رابط شاشة الطباعة</div>
-                <div className="muted" style={{ fontSize: 13.5 }}>افتحه داخل المحل ليستخرج الزبون ورقة الدور برقم هاتفه</div>
+                <div style={{ fontWeight: 700 }}>{t("bd.printLink")}</div>
+                <div className="muted" style={{ fontSize: 13.5 }}>{t("bd.printLinkHint")}</div>
               </div>
               <div className="row">
                 <code style={{ background: "#fff", padding: "8px 12px", borderRadius: 8, fontSize: 13 }}>/print/{currentBusiness.slug}</code>
@@ -93,7 +93,7 @@ export default function BusinessDashboard() {
               </div>
             </div>
           )}
-          {copied === "print" && <div className="copy-inline-message">تم نسخ رابط شاشة الطباعة</div>}
+          {copied === "print" && <div className="copy-inline-message">{t("bd.printLinkCopied")}</div>}
         </div>
       )}
 
@@ -104,7 +104,7 @@ export default function BusinessDashboard() {
         <StatCard icon="✂️" value={fmtNumber(s.services)} label={t("navServices")} tone="warning" />
       </div>
 
-      <div className="card mt-3">
+      {currentBusiness?.requiresAppointmentApproval !== false && <div className="card mt-3">
         <div className="card-header">
           <h3 className="card-title">{t("upcomingAppointments")}</h3>
           <Link to={`${basePath}/appointments`} className="muted" style={{ fontSize: 13 }}>{t("allBookings")}</Link>
@@ -139,7 +139,7 @@ export default function BusinessDashboard() {
         ) : (
           <EmptyState icon="📅" title={t("noUpcomingAppointments")} hint={t("newBookingsAppearHere")} />
         )}
-      </div>
+      </div>}
     </>
   );
 }

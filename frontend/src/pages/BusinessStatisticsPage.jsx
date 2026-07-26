@@ -2,26 +2,28 @@ import { useEffect, useMemo, useState } from "react";
 import { useBusinessManage } from "../context/BusinessManageContext.jsx";
 import { useToast } from "../components/Toast.jsx";
 import { Badge, Field, Input, Select, Spinner, fmtDate, fmtNumber, fmtPrice, fmtTime } from "../components/ui.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
+import i18n from "../i18n/index.js";
+import { localeFor } from "../i18n/format.js";
 
 const PERIODS = [
-  { key: "month", label: "هذا الشهر" },
-  { key: "today", label: "اليوم" },
-  { key: "week", label: "آخر 7 أيام" },
-  { key: "year", label: "هذه السنة" },
-  { key: "all", label: "كل الفترة" },
-  { key: "custom", label: "تاريخ مخصص" },
+  { key: "month", labelKey: "stat.month" },
+  { key: "today", labelKey: "sd.today" },
+  { key: "week", labelKey: "stat.last7" },
+  { key: "year", labelKey: "stat.thisYear" },
+  { key: "all", labelKey: "stat.allPeriod" },
+  { key: "custom", labelKey: "stat.customDate" },
 ];
 
 const STATUS = {
-  COMPLETED: { label: "مكتملة", color: "#22c55e", tone: "success" },
-  CONFIRMED: { label: "مؤكدة", color: "#3b82f6", tone: "info" },
-  PENDING: { label: "لم تحضر بعد", color: "#f59e0b", tone: "warning" },
-  CANCELLED: { label: "مرفوضة", color: "#ef4444", tone: "danger" },
-  NO_SHOW: { label: "لم يحضر", color: "#94a3b8", tone: "muted" },
+  COMPLETED: { get label() { return i18n.t("stat.completed"); }, color: "#22c55e", tone: "success" },
+  CONFIRMED: { get label() { return i18n.t("stat.confirmed"); }, color: "#3b82f6", tone: "info" },
+  PENDING: { get label() { return i18n.t("stat.pending"); }, color: "#f59e0b", tone: "warning" },
+  CANCELLED: { get label() { return i18n.t("stat.cancelled"); }, color: "#ef4444", tone: "danger" },
+  NO_SHOW: { get label() { return i18n.t("statusNoShow"); }, color: "#94a3b8", tone: "muted" },
 };
 
 const PAYMENT_COLORS = ["#22c55e", "#3b82f6", "#7c3aed", "#f59e0b"];
-const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const HOURS = [8, 10, 12, 14, 16, 18, 20];
 
 function dateInput(date) {
@@ -81,7 +83,7 @@ function pct(value, total) {
 }
 
 function compactDate(date) {
-  return new Date(date).toLocaleDateString("ar", { day: "numeric", month: "short" });
+  return new Date(date).toLocaleDateString(localeFor(i18n.language), { day: "numeric", month: "short" });
 }
 
 function makePath(values, width = 124, height = 42) {
@@ -208,6 +210,8 @@ function MiniProgress({ label, sub, value, color = "#22c55e" }) {
 
 export default function BusinessStatisticsPage() {
   const { api } = useBusinessManage();
+  const { t } = useLanguage();
+  const dayNames = [t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday"), t("friday"), t("saturday")];
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState([]);
@@ -286,22 +290,22 @@ export default function BusinessStatisticsPage() {
     })).filter((item) => item.value > 0);
 
     const paymentMap = [
-      { label: "نقداً", value: sum(paidRows.filter((item) => item.paymentMethod === "PAY_AT_STORE"), amountOf), color: PAYMENT_COLORS[0] },
-      { label: "بطاقة ائتمان", value: sum(paidRows.filter((item) => item.paymentMethod === "ONLINE"), amountOf), color: PAYMENT_COLORS[1] },
-      { label: "تحويل بنكي", value: 0, color: PAYMENT_COLORS[2] },
-      { label: "محفظة إلكترونية", value: 0, color: PAYMENT_COLORS[3] },
+      { label: t("stat.cash"), value: sum(paidRows.filter((item) => item.paymentMethod === "PAY_AT_STORE"), amountOf), color: PAYMENT_COLORS[0] },
+      { label: t("stat.creditCard"), value: sum(paidRows.filter((item) => item.paymentMethod === "ONLINE"), amountOf), color: PAYMENT_COLORS[1] },
+      { label: t("stat.bankTransfer"), value: 0, color: PAYMENT_COLORS[2] },
+      { label: t("stat.eWallet"), value: 0, color: PAYMENT_COLORS[3] },
     ].filter((item) => item.value > 0);
 
     const employeeMap = new Map();
     rows.forEach((appointment) => {
-      const name = appointment.employee?.name || "غير محدد";
+      const name = appointment.employee?.name || t("stat.unspecified");
       const item = employeeMap.get(name) || { name, total: 0, attended: 0, revenue: 0 };
       item.total += 1;
       if (appointment.status !== "NO_SHOW" && appointment.status !== "CANCELLED") item.attended += 1;
       employeeMap.set(name, item);
     });
     paidRows.forEach((appointment) => {
-      const name = appointment.employee?.name || "غير محدد";
+      const name = appointment.employee?.name || t("stat.unspecified");
       const item = employeeMap.get(name) || { name, total: 0, attended: 0, revenue: 0 };
       item.revenue += amountOf(appointment);
       employeeMap.set(name, item);
@@ -311,8 +315,8 @@ export default function BusinessStatisticsPage() {
       .sort((a, b) => b.attendance - a.attendance)
       .slice(0, 5);
 
-    const peak = DAYS.map((day, dayIndex) => ({
-      day,
+    const peak = Array.from({ length: 7 }).map((_, dayIndex) => ({
+      dayIndex,
       hours: HOURS.map((hour) => rows.filter((appointment) => {
         const date = new Date(appointment.startAt);
         return date.getDay() === dayIndex && date.getHours() >= hour && date.getHours() < hour + 2;
@@ -321,12 +325,12 @@ export default function BusinessStatisticsPage() {
     const peakMax = Math.max(...peak.flatMap((day) => day.hours), 1);
 
     const overview = [
-      ["إجمالي العملاء", new Set(rows.map((item) => item.customerPhone).filter(Boolean)).size],
-      ["إجمالي المواعيد", rows.length],
-      ["معدل الإلغاء", `${pct(rows.filter((item) => item.status === "CANCELLED").length, rows.length)}%`],
-      ["متوسط قيمة الطلب", fmtPrice(Math.round(revenue / Math.max(paidRows.length, 1)))],
-      ["إجمالي الخدمات", new Set(rows.map((item) => item.service?.name).filter(Boolean)).size],
-      ["إجمالي الموظفين", activeEmployees],
+      [t("stat.totalCustomers"), new Set(rows.map((item) => item.customerPhone).filter(Boolean)).size],
+      [t("stat.totalAppointments"), rows.length],
+      [t("stat.cancelRate"), `${pct(rows.filter((item) => item.status === "CANCELLED").length, rows.length)}%`],
+      [t("stat.avgOrderValue"), fmtPrice(Math.round(revenue / Math.max(paidRows.length, 1)))],
+      [t("stat.totalServices"), new Set(rows.map((item) => item.service?.name).filter(Boolean)).size],
+      [t("stat.totalStaff"), activeEmployees],
     ];
 
     return {
@@ -348,19 +352,19 @@ export default function BusinessStatisticsPage() {
       overview,
       recent: rows.slice().sort((a, b) => new Date(b.startAt) - new Date(a.startAt)).slice(0, 6),
     };
-  }, [appointments, range]);
+  }, [appointments, range, t]);
 
   if (loading) return <Spinner page />;
 
-  const displayFrom = range.from ? fmtDate(range.from) : "البداية";
-  const displayTo = range.to ? fmtDate(range.to) : "اليوم";
+  const displayFrom = range.from ? fmtDate(range.from) : t("stat.beginning");
+  const displayTo = range.to ? fmtDate(range.to) : t("sd.today");
 
   return (
     <div className="reports-page" data-no-auto-translate="true">
       <div className="reports-header">
         <div>
-          <div className="page-title">التحليلات والتقارير</div>
-          <div className="page-sub">لوحة تلخص الأداء المالي، الحجوزات، الحضور، وأوقات الذروة.</div>
+          <div className="page-title">{t("stat.title")}</div>
+          <div className="page-sub">{t("stat.sub")}</div>
         </div>
         <span className="reports-header-icon">⌁</span>
       </div>
@@ -369,7 +373,7 @@ export default function BusinessStatisticsPage() {
         <div className="reports-date-chip">{displayFrom} - {displayTo}</div>
         <Field>
           <Select value={period} onChange={(event) => setPeriod(event.target.value)}>
-            {PERIODS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+            {PERIODS.map((item) => <option key={item.key} value={item.key}>{t(item.labelKey)}</option>)}
           </Select>
         </Field>
         {period === "custom" && (
@@ -381,28 +385,28 @@ export default function BusinessStatisticsPage() {
       </div>
 
       <div className="reports-kpi-grid">
-        <KpiCard icon="◌" title="إجمالي الأرباح" value={fmtPrice(report.revenue)} change="+12.5% عن الفترة السابقة" color="#22c55e" data={report.spark} />
-        <KpiCard icon="▣" title="إجمالي المواعيد" value={fmtNumber(report.appointmentsCount)} change="+8.3% عن الفترة السابقة" color="#7c3aed" data={report.spark.map((v) => v / 2)} />
-        <KpiCard icon="♙" title="العملاء الجدد" value={fmtNumber(new Set(report.rows.map((item) => item.customerPhone)).size)} change="+15.7% عن الفترة السابقة" color="#3b82f6" data={report.spark.map((v, i) => v + i)} />
-        <KpiCard icon="☆" title="متوسط التقييم" value={`${report.averageRating} ★`} change="+0.3 عن الفترة السابقة" color="#f59e0b" data={[1, 2, 1, 3, 2, 4]} />
-        <KpiCard icon="♂" title="نسبة الحضور" value={`${report.attendanceRate}%`} change="+5% عن الفترة السابقة" color="#22c55e" data={[2, 1, 2, 1, 3, 2, 4]} />
+        <KpiCard icon="◌" title={t("stat.totalProfit")} value={fmtPrice(report.revenue)} change={`+12.5% ${t("stat.vsPrevious")}`} color="#22c55e" data={report.spark} />
+        <KpiCard icon="▣" title={t("stat.totalAppointments")} value={fmtNumber(report.appointmentsCount)} change={`+8.3% ${t("stat.vsPrevious")}`} color="#7c3aed" data={report.spark.map((v) => v / 2)} />
+        <KpiCard icon="♙" title={t("stat.newCustomers")} value={fmtNumber(new Set(report.rows.map((item) => item.customerPhone)).size)} change={`+15.7% ${t("stat.vsPrevious")}`} color="#3b82f6" data={report.spark.map((v, i) => v + i)} />
+        <KpiCard icon="☆" title={t("stat.avgRating")} value={`${report.averageRating} ★`} change={`+0.3 ${t("stat.vsPrevious")}`} color="#f59e0b" data={[1, 2, 1, 3, 2, 4]} />
+        <KpiCard icon="♂" title={t("stat.attendanceRate")} value={`${report.attendanceRate}%`} change={`+5% ${t("stat.vsPrevious")}`} color="#22c55e" data={[2, 1, 2, 1, 3, 2, 4]} />
       </div>
 
       <div className="reports-main-grid">
         <div className="report-card report-card-wide">
           <div className="report-card-head">
             <div>
-              <span>إجمالي الإيرادات</span>
+              <span>{t("stat.totalRevenue")}</span>
               <strong>{fmtPrice(report.revenue)}</strong>
             </div>
-            <button className="btn btn-sm btn-ghost">حسب اليوم</button>
+            <button className="btn btn-sm btn-ghost">{t("stat.byDay")}</button>
           </div>
-          <AreaChart points={report.daily.length ? report.daily : [{ key: "0", label: "لا بيانات", revenue: 0 }]} />
+          <AreaChart points={report.daily.length ? report.daily : [{ key: "0", label: t("stat.noData"), revenue: 0 }]} />
         </div>
 
         <div className="report-card">
-          <div className="report-card-title">المواعيد حسب الحالة</div>
-          <DonutChart total={report.appointmentsCount} segments={report.statusSegments} centerValue={fmtNumber(report.appointmentsCount)} centerTitle="إجمالي المواعيد" />
+          <div className="report-card-title">{t("stat.appointmentsByStatus")}</div>
+          <DonutChart total={report.appointmentsCount} segments={report.statusSegments} centerValue={fmtNumber(report.appointmentsCount)} centerTitle={t("stat.totalAppointments")} />
           <div className="report-legend">
             {report.statusSegments.map((item) => (
               <div key={item.key}><span style={{ background: item.color }} />{item.label}<b>{pct(item.value, report.appointmentsCount)}% ({item.value})</b></div>
@@ -411,7 +415,7 @@ export default function BusinessStatisticsPage() {
         </div>
 
         <div className="report-card">
-          <div className="report-card-title">نظرة عامة</div>
+          <div className="report-card-title">{t("stat.overview")}</div>
           <div className="report-overview">
             {report.overview.map(([label, value]) => (
               <div key={label}><span>{label}</span><strong>{value}</strong></div>
@@ -422,9 +426,9 @@ export default function BusinessStatisticsPage() {
 
       <div className="reports-secondary-grid">
         <div className="report-card">
-          <div className="report-card-link">عرض الكل</div>
-          <div className="report-card-title">المدفوعات</div>
-          <DonutChart total={report.revenue || 1} segments={report.paymentMap} centerValue={fmtPrice(report.revenue)} centerTitle="إجمالي المدفوعات" />
+          <div className="report-card-link">{t("viewAll")}</div>
+          <div className="report-card-title">{t("stat.payments")}</div>
+          <DonutChart total={report.revenue || 1} segments={report.paymentMap} centerValue={fmtPrice(report.revenue)} centerTitle={t("stat.totalPayments")} />
           <div className="report-legend">
             {report.paymentMap.map((item) => (
               <div key={item.label}><span style={{ background: item.color }} />{item.label}<b>{fmtPrice(item.value)}</b></div>
@@ -433,8 +437,8 @@ export default function BusinessStatisticsPage() {
         </div>
 
         <div className="report-card">
-          <div className="report-card-link">عرض الكل</div>
-          <div className="report-card-title">حضور الموظفين</div>
+          <div className="report-card-link">{t("viewAll")}</div>
+          <div className="report-card-title">{t("stat.staffAttendance")}</div>
           <div className="report-staff-list">
             {(report.employeeRows.length ? report.employeeRows : employees.slice(0, 5).map((employee) => ({ name: employee.name, total: 0, attended: 0, attendance: 0 }))).map((employee, index) => (
               <MiniProgress
@@ -449,11 +453,11 @@ export default function BusinessStatisticsPage() {
         </div>
 
         <div className="report-card">
-          <div className="report-card-title">أوقات الذروة</div>
+          <div className="report-card-title">{t("stat.peakTimes")}</div>
           <div className="report-heatmap">
             {report.peak.map((row) => (
-              <div key={row.day} className="report-heat-row">
-                <span>{row.day}</span>
+              <div key={row.dayIndex} className="report-heat-row">
+                <span>{dayNames[row.dayIndex]}</span>
                 {row.hours.map((value, index) => (
                   <i key={index} style={{ opacity: 0.16 + (value / report.peakMax) * 0.84 }} />
                 ))}
@@ -469,19 +473,19 @@ export default function BusinessStatisticsPage() {
 
       <div className="report-card mt-3">
         <div className="report-card-head">
-          <div className="report-card-title">آخر المعاملات</div>
-          <button className="btn btn-sm btn-ghost">عرض الكل</button>
+          <div className="report-card-title">{t("stat.recentTransactions")}</div>
+          <button className="btn btn-sm btn-ghost">{t("viewAll")}</button>
         </div>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>المعرف</th>
-                <th>العميل</th>
-                <th>الخدمة</th>
-                <th>العملة</th>
-                <th>التاريخ</th>
-                <th>الحالة</th>
+                <th>{t("stat.id")}</th>
+                <th>{t("stat.client")}</th>
+                <th>{t("service")}</th>
+                <th>{t("stat.amountCol")}</th>
+                <th>{t("date")}</th>
+                <th>{t("status")}</th>
               </tr>
             </thead>
             <tbody>
@@ -490,13 +494,13 @@ export default function BusinessStatisticsPage() {
                   <td>#{appointment.id}</td>
                   <td>{appointment.customerName}</td>
                   <td>{appointment.service?.name || "-"}</td>
-                  <td>{amountOf(appointment) === 0 ? "مجانية" : fmtPrice(amountOf(appointment))}</td>
+                  <td>{amountOf(appointment) === 0 ? t("pb.free") : fmtPrice(amountOf(appointment))}</td>
                   <td>{fmtDate(appointment.startAt)} - {fmtTime(appointment.startAt)}</td>
                   <td><Badge tone={STATUS[appointment.status]?.tone}>{STATUS[appointment.status]?.label || appointment.status}</Badge></td>
                 </tr>
               ))}
               {!report.recent.length && (
-                <tr><td colSpan="6" className="soft" style={{ textAlign: "center", padding: 22 }}>لا توجد معاملات ضمن الفترة المختارة</td></tr>
+                <tr><td colSpan="6" className="soft" style={{ textAlign: "center", padding: 22 }}>{t("stat.noTransactions")}</td></tr>
               )}
             </tbody>
           </table>

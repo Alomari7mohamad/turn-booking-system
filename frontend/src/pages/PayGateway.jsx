@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { paymentApi } from "../api/endpoints.js";
 import { Button, Spinner, EmptyState, fmtPrice, fmtDate, fmtTime } from "../components/ui.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
 // صفحة بوابة الدفع الوهمية (للتجربة المحلية فقط).
 // في الإنتاج يُوجَّه الزبون لبوابة حقيقية (Stripe/PayTabs...) بدل هذه الصفحة.
 export default function PayGateway() {
   const { reference } = useParams();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [payment, setPayment] = useState(null);
   const [error, setError] = useState(null);
   const [processing, setProcessing] = useState(false);
@@ -33,7 +35,7 @@ export default function PayGateway() {
   if (error)
     return (
       <Center>
-        <EmptyState icon="⚠️" title="تعذّر تحميل عملية الدفع" hint={error} />
+        <EmptyState icon="⚠️" title={t("pg.loadError")} hint={error} />
       </Center>
     );
   if (!payment) return <Spinner page />;
@@ -42,7 +44,7 @@ export default function PayGateway() {
   if (payment.status === "PAID")
     return (
       <Center>
-        <EmptyState icon="✅" title="تم الدفع مسبقًا" hint="هذه العملية مدفوعة بالفعل" />
+        <EmptyState icon="✅" title={t("pg.alreadyPaid")} hint={t("pg.alreadyPaidHint")} />
       </Center>
     );
 
@@ -50,20 +52,20 @@ export default function PayGateway() {
     <Center>
       <div className="card" style={{ overflow: "hidden" }}>
         <div style={{ background: "var(--gradient)", color: "#fff", padding: "22px 24px" }}>
-          <div style={{ opacity: 0.85, fontSize: 13 }}>🔒 بوابة دفع آمنة (محاكاة)</div>
+          <div style={{ opacity: 0.85, fontSize: 13 }}>🔒 {t("pg.secureGateway")}</div>
           <div style={{ fontSize: 26, fontWeight: 800, marginTop: 6 }}>{fmtPrice(payment.amount)}</div>
           <div style={{ opacity: 0.9, fontSize: 13.5 }}>{payment.business}</div>
         </div>
         <div className="card-pad col" style={{ gap: 14 }}>
-          <Row label="الخدمة" value={payment.service} />
-          <Row label="الموظف" value={payment.employee} />
-          <Row label="الموعد" value={`${fmtDate(payment.startAt)} · ${fmtTime(payment.startAt)}`} />
-          <div className="help-text">لا نخزّن أي بيانات بطاقات. هذه صفحة محاكاة لاختبار تدفّق الدفع.</div>
+          <Row label={t("service")} value={payment.service} />
+          <Row label={t("bc.employee")} value={payment.employee} />
+          <Row label={t("pg.appointment")} value={`${fmtDate(payment.startAt)} · ${fmtTime(payment.startAt)}`} />
+          <div className="help-text">{t("pg.disclaimer")}</div>
           <Button size="lg" block loading={processing} onClick={() => complete("success")}>
-            💳 ادفع الآن
+            💳 {t("pg.payNow")}
           </Button>
           <Button variant="ghost" block disabled={processing} onClick={() => complete("fail")}>
-            محاكاة فشل الدفع
+            {t("pg.simulateFail")}
           </Button>
         </div>
       </div>

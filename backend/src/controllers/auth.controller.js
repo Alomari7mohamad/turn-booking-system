@@ -19,6 +19,7 @@ const businessSessionSelect = {
   customerHubEnabled: true,
   customerPointsPercent: true,
   reviewsEnabled: true,
+  requiresAppointmentApproval: true,
 };
 
 function normalizeEmail(email) {

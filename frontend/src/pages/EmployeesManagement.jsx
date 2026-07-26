@@ -4,9 +4,10 @@ import { useToast } from "../components/Toast.jsx";
 import { Modal } from "../components/Modal.jsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { Button, Field, Input, Select, Badge, Spinner, EmptyState } from "../components/ui.jsx";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
 const empty = { name: "", phone: "", title: "", role: "PROVIDER", serviceIds: [], loginEmail: "", loginPassword: "" };
-const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const DAYS = Array.from({ length: 7 });
 
 function buildEmployeeWeek(saved = [], businessHours = []) {
   const businessOpenDays = businessHours.filter((h) => !h.isClosed);
@@ -36,6 +37,8 @@ function buildEmployeeWeek(saved = [], businessHours = []) {
 export default function EmployeesManagement() {
   const toast = useToast();
   const { api } = useBusinessManage();
+  const { t } = useLanguage();
+  const dayNames = [t("sunday"), t("monday"), t("tuesday"), t("wednesday"), t("thursday"), t("friday"), t("saturday")];
   const [employees, setEmployees] = useState(null);
   const [services, setServices] = useState([]);
   const [modal, setModal] = useState(false);
@@ -91,7 +94,7 @@ export default function EmployeesManagement() {
     setSavingHours(true);
     try {
       await api.setEmployeeWorkingHours(hoursModal.id, employeeHours);
-      toast.success("تم حفظ ساعات عمل الموظف");
+      toast.success(t("emp.hoursSaved"));
       setHoursModal(null);
     } catch (err) {
       toast.error(err.message);
@@ -109,7 +112,7 @@ export default function EmployeesManagement() {
       } else {
         await api.createEmployee(form);
       }
-      toast.success(editing ? "تم تحديث الموظف" : "تمت إضافة الموظف");
+      toast.success(editing ? t("emp.updated") : t("emp.added"));
       setModal(false);
       load();
     } catch (err) {
@@ -124,7 +127,7 @@ export default function EmployeesManagement() {
     setConfirmDel(null);
     try {
       await api.deleteEmployee(id);
-      toast.success("تم حذف الموظف");
+      toast.success(t("emp.deleted"));
       load();
     } catch (err) {
       toast.error(err.message);
@@ -139,10 +142,10 @@ export default function EmployeesManagement() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">الموظفون</div>
-          <div className="page-sub">أضف الموظفين وحدّد الخدمات التي يقدّمونها</div>
+          <div className="page-title">{t("emp.title")}</div>
+          <div className="page-sub">{t("emp.sub")}</div>
         </div>
-        <Button onClick={openCreate}>➕ موظف جديد</Button>
+        <Button onClick={openCreate}>➕ {t("emp.newEmployee")}</Button>
       </div>
 
       {employees.length ? (
@@ -152,55 +155,55 @@ export default function EmployeesManagement() {
               <div className="row">
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700 }}>{e.name}</div>
-                  <div className="soft" style={{ fontSize: 13 }}>{e.title || (e.role === "SECRETARY" ? "قسم سكرتارية" : "مقدم خدمة")}</div>
+                  <div className="soft" style={{ fontSize: 13 }}>{e.title || (e.role === "SECRETARY" ? t("emp.secretaryDept") : t("pb.serviceProvider"))}</div>
                 </div>
               </div>
-              {e.role === "SECRETARY" && <div style={{ marginTop: 8 }}><Badge tone="success">قسم سكرتارية</Badge></div>}
+              {e.role === "SECRETARY" && <div style={{ marginTop: 8 }}><Badge tone="success">{t("emp.secretaryDept")}</Badge></div>}
               {e.phone && <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>📞 {e.phone}</div>}
-              {e.user && <div style={{ marginTop: 8 }}><Badge tone="primary">🔑 لديه حساب دخول</Badge></div>}
+              {e.user && <div style={{ marginTop: 8 }}><Badge tone="primary">🔑 {t("emp.hasLogin")}</Badge></div>}
               <div className="row wrap" style={{ gap: 6, marginTop: 12 }}>
                 {e.serviceIds?.length ? e.serviceIds.map((id) => (
-                  <span key={id} className="badge badge-muted">{serviceName(id) || "خدمة"}</span>
-                )) : <span className="soft" style={{ fontSize: 13 }}>لا خدمات مسندة</span>}
+                  <span key={id} className="badge badge-muted">{serviceName(id) || t("emp.serviceFallback")}</span>
+                )) : <span className="soft" style={{ fontSize: 13 }}>{t("emp.noServicesAssigned")}</span>}
               </div>
               <div className="employee-actions row wrap" style={{ gap: 8, marginTop: 16 }}>
-                <Button size="sm" variant="ghost" onClick={() => openEdit(e)}>✎ تعديل</Button>
-                <Button size="sm" variant="ghost" onClick={() => openHours(e)}>ساعات العمل</Button>
-                <Button size="sm" variant="danger" onClick={() => setConfirmDel(e.id)}>حذف</Button>
+                <Button size="sm" variant="ghost" onClick={() => openEdit(e)}>✎ {t("edit")}</Button>
+                <Button size="sm" variant="ghost" onClick={() => openHours(e)}>{t("navWorkingHours")}</Button>
+                <Button size="sm" variant="danger" onClick={() => setConfirmDel(e.id)}>{t("delete")}</Button>
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <EmptyState icon="👥" title="لا يوجد موظفون" hint="أضف موظفيك لتتمكّن من إسناد الحجوزات" action={<Button onClick={openCreate}>➕ موظف جديد</Button>} />
+        <EmptyState icon="👥" title={t("emp.noEmployees")} hint={t("emp.noEmployeesHint")} action={<Button onClick={openCreate}>➕ {t("emp.newEmployee")}</Button>} />
       )}
 
       <Modal
         open={modal}
         onClose={() => setModal(false)}
-        title={editing ? "تعديل موظف" : "موظف جديد"}
+        title={editing ? t("emp.editEmployee") : t("emp.newEmployee")}
         large
         footer={
           <>
-            <Button form="emp-form" type="submit" loading={saving}>حفظ</Button>
-            <Button variant="ghost" onClick={() => setModal(false)}>إلغاء</Button>
+            <Button form="emp-form" type="submit" loading={saving}>{t("save")}</Button>
+            <Button variant="ghost" onClick={() => setModal(false)}>{t("cancel")}</Button>
           </>
         }
       >
         <form id="emp-form" onSubmit={save} className="col" style={{ gap: 16 }}>
           <div className="grid grid-2">
-            <Field label="الاسم"><Input value={form.name} onChange={set("name")} required /></Field>
-            <Field label="المسمى الوظيفي"><Input value={form.title} onChange={set("title")} placeholder="مثال: مصفف شعر" /></Field>
-            <Field label="دور الموظف">
+            <Field label={t("pb.name")}><Input value={form.name} onChange={set("name")} required /></Field>
+            <Field label={t("emp.jobTitle")}><Input value={form.title} onChange={set("title")} placeholder={t("emp.jobTitlePlaceholder")} /></Field>
+            <Field label={t("emp.role")}>
               <Select value={form.role} onChange={set("role")}>
-                <option value="PROVIDER">مقدم خدمة</option>
-                <option value="SECRETARY">قسم سكرتارية</option>
+                <option value="PROVIDER">{t("pb.serviceProvider")}</option>
+                <option value="SECRETARY">{t("emp.secretaryDept")}</option>
               </Select>
             </Field>
-            <Field label="الهاتف"><Input value={form.phone} onChange={set("phone")} /></Field>
+            <Field label={t("phone")}><Input value={form.phone} onChange={set("phone")} /></Field>
           </div>
 
-          <Field label="الخدمات التي يقدّمها">
+          <Field label={t("emp.services")}>
             <div className="row wrap" style={{ gap: 8 }}>
               {services.length ? services.map((s) => (
                 <button type="button" key={s.id} onClick={() => toggleService(s.id)}
@@ -208,31 +211,31 @@ export default function EmployeesManagement() {
                   style={{ border: "none", cursor: "pointer", padding: "7px 13px" }}>
                   {form.serviceIds.includes(s.id) ? "✓ " : ""}{s.name}
                 </button>
-              )) : <span className="soft">أضف خدمات أولًا من صفحة الخدمات</span>}
+              )) : <span className="soft">{t("emp.addServicesFirst")}</span>}
             </div>
           </Field>
-          <div style={{ fontWeight: 700, marginTop: 4 }}>{form.role === "SECRETARY" ? "رقم دخول قسم السكرتارية" : "حساب دخول العامل"}</div>
+          <div style={{ fontWeight: 700, marginTop: 4 }}>{form.role === "SECRETARY" ? t("emp.secretaryLogin") : t("emp.employeeLogin")}</div>
           <p className="help-text" style={{ marginTop: -8 }}>
             {form.role === "SECRETARY"
-              ? "كلمة المرور هنا تعمل كرقم سري لفتح صفحة قسم السكرتارية. يمكن للمدير أيضاً الدخول بكلمة مروره."
-              : "البريد وكلمة السر الخاصة بدخول العامل. كلمة السر القديمة لا تظهر إلا إذا كانت محفوظة بعد هذا التحديث."}
+              ? t("emp.secretaryHelp")
+              : t("emp.employeeHelp")}
           </p>
           <div className="grid grid-2">
-            <Field label="بريد الدخول"><Input type="email" value={form.loginEmail} onChange={set("loginEmail")} /></Field>
-            <Field label="كلمة المرور">
+            <Field label={t("emp.loginEmail")}><Input type="email" value={form.loginEmail} onChange={set("loginEmail")} /></Field>
+            <Field label={t("password")}>
               <div className="password-input">
                 <Input
                   type={showPassword ? "text" : "password"}
                   value={form.loginPassword}
                   onChange={set("loginPassword")}
-                  placeholder={editing && !form.loginPassword ? "غير محفوظة سابقًا" : ""}
+                  placeholder={editing && !form.loginPassword ? t("emp.notSavedBefore") : ""}
                 />
                 <button
                   type="button"
                   className="password-toggle"
                   onClick={() => setShowPassword((value) => !value)}
-                  aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
-                  title={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                  aria-label={showPassword ? t("hidePassword") : t("showPassword")}
+                  title={showPassword ? t("hidePassword") : t("showPassword")}
                 >
                   {showPassword ? "🙈" : "👁"}
                 </button>
@@ -245,12 +248,12 @@ export default function EmployeesManagement() {
       <Modal
         open={!!hoursModal}
         onClose={() => setHoursModal(null)}
-        title={`ساعات عمل ${hoursModal?.name || ""}`}
+        title={t("emp.employeeHours", { name: hoursModal?.name || "" })}
         large
         footer={
           <>
-            <Button form="employee-hours-form" type="submit" loading={savingHours}>حفظ</Button>
-            <Button variant="ghost" onClick={() => setHoursModal(null)}>إلغاء</Button>
+            <Button form="employee-hours-form" type="submit" loading={savingHours}>{t("save")}</Button>
+            <Button variant="ghost" onClick={() => setHoursModal(null)}>{t("cancel")}</Button>
           </>
         }
       >
@@ -259,7 +262,7 @@ export default function EmployeesManagement() {
         ) : (
           <form id="employee-hours-form" onSubmit={saveEmployeeHours} className="col" style={{ gap: 10 }}>
             <p className="help-text" style={{ margin: 0 }}>
-              تظهر هنا فقط الأيام التي يعمل فيها المحل. وقت الاستراحة يحدد من صفحة ساعات عمل المحل فقط.
+              {t("emp.hoursHelp")}
             </p>
             {employeeHours.map((day) => (
               <div
@@ -267,14 +270,14 @@ export default function EmployeesManagement() {
                 className="row"
                 style={{ gap: 14, padding: "8px 0", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}
               >
-                <div style={{ width: 90, fontWeight: 700 }}>{DAYS[day.dayOfWeek]}</div>
+                <div style={{ width: 90, fontWeight: 700 }}>{dayNames[day.dayOfWeek]}</div>
                 <label className="row" style={{ gap: 6, cursor: "pointer", width: 120 }}>
                   <input
                     type="checkbox"
                     checked={!day.isClosed}
                     onChange={(e) => updateHour(day.dayOfWeek, { isClosed: !e.target.checked })}
                   />
-                  <span className={day.isClosed ? "soft" : ""}>{day.isClosed ? "مغلق" : "مفتوح"}</span>
+                  <span className={day.isClosed ? "soft" : ""}>{day.isClosed ? t("svc.closed") : t("wh.open")}</span>
                 </label>
                 <div
                   className="row"
@@ -287,7 +290,7 @@ export default function EmployeesManagement() {
                     value={day.startTime}
                     onChange={(e) => updateHour(day.dayOfWeek, { startTime: e.target.value })}
                   />
-                  <span className="soft">إلى</span>
+                  <span className="soft">{t("svc.to")}</span>
                   <input
                     className="input"
                     type="time"
@@ -304,9 +307,9 @@ export default function EmployeesManagement() {
 
       <ConfirmDialog
         open={!!confirmDel}
-        title="حذف الموظف"
-        message="سيتم حذف الموظف وإسناداته. الحجوزات السابقة قد تمنع الحذف."
-        confirmText="حذف"
+        title={t("emp.deleteTitle")}
+        message={t("emp.deleteMsg")}
+        confirmText={t("delete")}
         danger
         onConfirm={doDelete}
         onClose={() => setConfirmDel(null)}

@@ -1,4 +1,5 @@
 import { Button } from "./ui.jsx";
+import i18n from "../i18n/index.js";
 
 function canvasToDataUrl(canvas, quality) {
   return canvas.toDataURL("image/webp", quality);
@@ -7,7 +8,7 @@ function canvasToDataUrl(canvas, quality) {
 export function readLogoFile(file, onDone, onError, options = {}) {
   if (!file) return;
   if (!file.type.startsWith("image/")) {
-    onError?.("اختر ملف صورة صالح");
+    onError?.(i18n.t("lp.invalidImage"));
     return;
   }
 
@@ -49,7 +50,7 @@ export function readLogoFile(file, onDone, onError, options = {}) {
 
   image.onerror = () => {
     URL.revokeObjectURL(objectUrl);
-    onError?.("تعذر قراءة الصورة");
+    onError?.(i18n.t("lp.readError"));
   };
   image.src = objectUrl;
 }
@@ -58,12 +59,16 @@ export function LogoPicker({
   value,
   onChange,
   onError,
-  chooseText = "اختار شعار",
-  changeText = "تغيير الشعار",
-  removeText = "إزالة الشعار",
-  previewAlt = "شعار المحل",
+  chooseText,
+  changeText,
+  removeText,
+  previewAlt,
   imageOptions,
 }) {
+  const choose = chooseText ?? i18n.t("lp.chooseLogo");
+  const change = changeText ?? i18n.t("lp.changeLogo");
+  const remove = removeText ?? i18n.t("lp.removeLogo");
+  const alt = previewAlt ?? i18n.t("lp.logoAlt");
   return (
     <div className="logo-picker">
       <label className="logo-picker-drop">
@@ -73,13 +78,13 @@ export function LogoPicker({
           onChange={(event) => readLogoFile(event.target.files?.[0], onChange, onError, imageOptions)}
         />
         <span className="logo-picker-icon">▣</span>
-        <span className="logo-picker-text">{value ? changeText : chooseText}</span>
-        <span className="logo-picker-hint">PNG أو JPG</span>
+        <span className="logo-picker-text">{value ? change : choose}</span>
+        <span className="logo-picker-hint">{i18n.t("lp.pngOrJpg")}</span>
       </label>
       {value && (
         <div className="brand-preview">
-          <img src={value} alt={previewAlt} />
-          <Button type="button" size="sm" variant="ghost" onClick={() => onChange("")}>{removeText}</Button>
+          <img src={value} alt={alt} />
+          <Button type="button" size="sm" variant="ghost" onClick={() => onChange("")}>{remove}</Button>
         </div>
       )}
     </div>

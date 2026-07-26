@@ -23,237 +23,6 @@ const defaultA11y = {
   stopAnimations: false,
 };
 
-const copy = {
-  ar: {
-    title: "أدوات إمكانية الوصول",
-    subtitle: "قم بتخصيص تجربتك لتناسب احتياجاتك",
-    fontSize: "حجم النص",
-    colorModes: "أوضاع الألوان",
-    grayscale: "تدرج الرمادي",
-    invert: "عكس الألوان",
-    lowSaturation: "تشبع منخفض",
-    colorFilter: "فلتر عمى الألوان",
-    none: "لا شيء",
-    red: "أحمر",
-    blueYellow: "أزرق-أصفر",
-    redGreen: "أحمر-أخضر",
-    visual: "خيارات بصرية",
-    contrast: "تباين عالي",
-    bigText: "نص كبير",
-    highlightLinks: "تسليط الضوء على الروابط",
-    underlineLinks: "تسطير الروابط",
-    hideImages: "إخفاء الصور",
-    text: "خيارات النص",
-    readableFont: "خط قابل للقراءة",
-    lineSpacing: "زيادة المسافة بين الأسطر",
-    letterSpacing: "مسافة بين الحروف",
-    alignLeft: "محاذاة النص لليسار",
-    navigation: "خيارات التنقل",
-    bigCursor: "مؤشر كبير",
-    reduceMotion: "تقليل الحركة",
-    stopAnimations: "إيقاف الرسوم المتحركة",
-    reset: "إعادة تعيين إلى الافتراضي",
-    close: "إغلاق",
-  },
-  he: {
-    title: "כלי נגישות",
-    subtitle: "התאימו את חוויית השימוש לצרכים שלכם",
-    fontSize: "גודל טקסט",
-    colorModes: "מצבי צבע",
-    grayscale: "גווני אפור",
-    invert: "היפוך צבעים",
-    lowSaturation: "רוויה נמוכה",
-    colorFilter: "מסנן עיוורון צבעים",
-    none: "ללא",
-    red: "אדום",
-    blueYellow: "כחול-צהוב",
-    redGreen: "אדום-ירוק",
-    visual: "אפשרויות חזותיות",
-    contrast: "ניגודיות גבוהה",
-    bigText: "טקסט גדול",
-    highlightLinks: "הדגשת קישורים",
-    underlineLinks: "קו תחתון לקישורים",
-    hideImages: "הסתרת תמונות",
-    text: "אפשרויות טקסט",
-    readableFont: "גופן קריא",
-    lineSpacing: "הגדלת רווח בין שורות",
-    letterSpacing: "רווח בין אותיות",
-    alignLeft: "יישור טקסט לשמאל",
-    navigation: "אפשרויות ניווט",
-    bigCursor: "סמן גדול",
-    reduceMotion: "הפחתת תנועה",
-    stopAnimations: "עצירת אנימציות",
-    reset: "איפוס לברירת מחדל",
-    close: "סגירה",
-  },
-};
-
-const cleanA11yCopy = {
-  ar: {
-    title: "أدوات إمكانية الوصول",
-    subtitle: "قم بتخصيص تجربتك لتناسب احتياجاتك",
-    fontSize: "حجم النص",
-    colorModes: "أوضاع الألوان",
-    grayscale: "تدرج الرمادي",
-    invert: "عكس الألوان",
-    lowSaturation: "تشبع منخفض",
-    colorFilter: "فلتر عمى الألوان",
-    none: "لا شيء",
-    red: "أحمر",
-    blueYellow: "أزرق-أصفر",
-    redGreen: "أحمر-أخضر",
-    visual: "خيارات بصرية",
-    contrast: "تباين عالي",
-    bigText: "نص كبير",
-    highlightLinks: "تسليط الضوء على الروابط",
-    underlineLinks: "تسطير الروابط",
-    hideImages: "إخفاء الصور",
-    text: "خيارات النص",
-    readableFont: "خط قابل للقراءة",
-    lineSpacing: "زيادة المسافة بين الأسطر",
-    letterSpacing: "مسافة بين الحروف",
-    alignLeft: "محاذاة النص لليسار",
-    navigation: "خيارات التنقل",
-    bigCursor: "مؤشر كبير",
-    reduceMotion: "تقليل الحركة",
-    stopAnimations: "إيقاف الرسوم المتحركة",
-    reset: "إعادة تعيين إلى الافتراضي",
-    close: "إغلاق",
-  },
-  he: {
-    title: "כלי נגישות",
-    subtitle: "התאימו את חוויית השימוש לצרכים שלכם",
-    fontSize: "גודל טקסט",
-    colorModes: "מצבי צבע",
-    grayscale: "גווני אפור",
-    invert: "היפוך צבעים",
-    lowSaturation: "רוויה נמוכה",
-    colorFilter: "מסנן עיוורון צבעים",
-    none: "ללא",
-    red: "אדום",
-    blueYellow: "כחול-צהוב",
-    redGreen: "אדום-ירוק",
-    visual: "אפשרויות חזותיות",
-    contrast: "ניגודיות גבוהה",
-    bigText: "טקסט גדול",
-    highlightLinks: "הדגשת קישורים",
-    underlineLinks: "קו תחתון לקישורים",
-    hideImages: "הסתרת תמונות",
-    text: "אפשרויות טקסט",
-    readableFont: "גופן קריא",
-    lineSpacing: "הגדלת רווח בין שורות",
-    letterSpacing: "רווח בין אותיות",
-    alignLeft: "יישור טקסט לשמאל",
-    navigation: "אפשרויות ניווט",
-    bigCursor: "סמן גדול",
-    reduceMotion: "הפחתת תנועה",
-    stopAnimations: "עצירת אנימציות",
-    reset: "איפוס לברירת מחדל",
-    close: "סגירה",
-  },
-};
-
-const textTranslations = new Map(Object.entries({
-  "لوحة التحكم": "לוח בקרה",
-  "إدارة المحلات": "ניהול עסקים",
-  "إدارة المدراء": "ניהול מנהלים",
-  "الحجوزات": "תורים",
-  "الحجوزات التي تم رفضها": "תורים שנדחו",
-  "الخدمات": "שירותים",
-  "الموظفون": "עובדים",
-  "ساعات العمل": "שעות פעילות",
-  "الاشتراك": "מנוי",
-  "سجل النشاط": "יומן פעילות",
-  "إعدادات المحل": "הגדרות העסק",
-  "إدارة الخدمات": "ניהול שירותים",
-  "إدارة الموظفين": "ניהול עובדים",
-  "البيانات الأساسية": "פרטים בסיסיים",
-  "إعدادات الدفع": "הגדרות תשלום",
-  "حفظ التغييرات": "שמירת שינויים",
-  "حفظ": "שמירה",
-  "إضافة": "הוספה",
-  "تعديل": "עריכה",
-  "حذف": "מחיקה",
-  "إلغاء": "ביטול",
-  "بحث": "חיפוש",
-  "طباعة": "הדפסה",
-  "قبول": "אישור",
-  "رفض": "דחייה",
-  "تأكيد": "אישור",
-  "الاسم": "שם",
-  "الهاتف": "טלפון",
-  "العنوان": "כתובת",
-  "البريد الإلكتروني": "אימייל",
-  "كلمة المرور": "סיסמה",
-  "اسم المحل": "שם העסק",
-  "اسم صاحب المحل": "שם בעל העסק",
-  "رقم الهاتف": "מספר טלפון",
-  "شعار المحل": "לוגו העסק",
-  "لون المحل": "צבע העסק",
-  "طريقة الدفع": "אמצעי תשלום",
-  "حالة الدفع": "סטטוס תשלום",
-  "الخدمة مجانية": "השירות בחינם",
-  "مدفوع": "שולם",
-  "غير مدفوع": "לא שולם",
-  "بانتظار التأكيد": "ממתין לאישור",
-  "مؤكد": "מאושר",
-  "مرفوض": "נדחה",
-  "مكتمل": "הושלם",
-  "لم يحضر": "לא הגיע",
-  "تأخر": "איחור",
-  "كل الموظفين": "כל העובדים",
-  "كل حالات الدفع": "כל מצבי התשלום",
-  "اختر الخدمة": "בחר שירות",
-  "اختر الموظف": "בחר עובד",
-  "اليوم والوقت": "יום ושעה",
-  "بياناتك": "הפרטים שלך",
-  "تأكيد الحجز": "אישור התור",
-  "تأكيد الحجز المجاني": "אישור תור בחינם",
-  "لا توجد بيانات": "אין נתונים",
-  "لا توجد حجوزات": "אין תורים",
-  "لا توجد مواعيد قادمة": "אין תורים קרובים",
-  "ستظهر الحجوزات الجديدة هنا": "תורים חדשים יופיעו כאן",
-  "الخدمة": "שירות",
-  "الموظف": "עובד",
-  "العميل": "לקוח",
-  "الحالة": "סטטוס",
-  "الإجراءات": "פעולות",
-  "السعر": "מחיר",
-  "المدة": "משך",
-  "دقيقة": "דקה",
-}));
-
-const originalTextNodes = new WeakMap();
-
-function translateTextNode(node, language) {
-  const value = node.nodeValue;
-  if (!value || !value.trim()) return;
-  const parent = node.parentElement;
-  if (!parent || parent.closest("[data-no-auto-translate], input, textarea, select, script, style")) return;
-  if (!originalTextNodes.has(node)) originalTextNodes.set(node, value);
-
-  const original = originalTextNodes.get(node);
-  if (language === "ar") {
-    if (node.nodeValue !== original) node.nodeValue = original;
-    return;
-  }
-
-  const trimmed = original.trim();
-  const translated = textTranslations.get(trimmed);
-  if (!translated) return;
-  node.nodeValue = original.replace(trimmed, translated);
-}
-
-function translateTree(root, language) {
-  if (!root || typeof document === "undefined") return;
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let node = walker.nextNode();
-  while (node) {
-    translateTextNode(node, language);
-    node = walker.nextNode();
-  }
-}
-
 function loadA11y() {
   try {
     const saved = JSON.parse(localStorage.getItem(A11Y_KEY)) || {};
@@ -296,10 +65,9 @@ function applyA11y(settings) {
 }
 
 export function GlobalControls() {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState(loadA11y);
-  const a = cleanA11yCopy[language] || cleanA11yCopy.ar;
 
   useEffect(() => {
     applyA11y(settings);
@@ -314,21 +82,6 @@ export function GlobalControls() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
-
-  useEffect(() => {
-    const root = document.getElementById("root");
-    translateTree(root, language);
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === Node.TEXT_NODE) translateTextNode(node, language);
-          if (node.nodeType === Node.ELEMENT_NODE) translateTree(node, language);
-        });
-      });
-    });
-    if (root) observer.observe(root, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, [language]);
 
   const toggle = (key) => setSettings((current) => ({ ...current, [key]: !current[key] }));
   const setFilter = (value) => setSettings((current) => ({ ...current, colorFilter: value }));
@@ -356,20 +109,20 @@ export function GlobalControls() {
 
       {open && (
         <div className="a11y-layer" data-no-auto-translate="true">
-          <button className="a11y-scrim" type="button" onClick={() => setOpen(false)} aria-label={a.close} />
-          <aside className="a11y-drawer" role="dialog" aria-modal="true" aria-label={a.title}>
-            <button type="button" className="a11y-close" onClick={() => setOpen(false)} aria-label={a.close}>
+          <button className="a11y-scrim" type="button" onClick={() => setOpen(false)} aria-label={t("a11y.close")} />
+          <aside className="a11y-drawer" role="dialog" aria-modal="true" aria-label={t("a11y.title")}>
+            <button type="button" className="a11y-close" onClick={() => setOpen(false)} aria-label={t("a11y.close")}>
               x
             </button>
             <div className="a11y-title">
               <AccessIcon />
-              <h2>{a.title}</h2>
-              <p>{a.subtitle}</p>
+              <h2>{t("a11y.title")}</h2>
+              <p>{t("a11y.subtitle")}</p>
             </div>
 
             <section className="a11y-section">
               <div className="a11y-section-title">
-                <span>{a.fontSize}</span>
+                <span>{t("a11y.fontSize")}</span>
                 <IconText />
               </div>
               <div className="a11y-font-control">
@@ -384,13 +137,13 @@ export function GlobalControls() {
 
             <section className="a11y-section">
               <div className="a11y-section-title">
-                <span>{a.colorModes}</span>
+                <span>{t("a11y.colorModes")}</span>
                 <IconPalette />
               </div>
-              <Switch label={a.grayscale} active={settings.grayscale} onClick={() => toggle("grayscale")} icon={<IconCircle />} />
-              <Switch label={a.invert} active={settings.invert} onClick={() => toggle("invert")} icon={<IconContrast />} />
-              <Switch label={a.lowSaturation} active={settings.lowSaturation} onClick={() => toggle("lowSaturation")} icon={<IconSpark />} />
-              <div className="a11y-filter-title">{a.colorFilter}</div>
+              <Switch label={t("a11y.grayscale")} active={settings.grayscale} onClick={() => toggle("grayscale")} icon={<IconCircle />} />
+              <Switch label={t("a11y.invert")} active={settings.invert} onClick={() => toggle("invert")} icon={<IconContrast />} />
+              <Switch label={t("a11y.lowSaturation")} active={settings.lowSaturation} onClick={() => toggle("lowSaturation")} icon={<IconSpark />} />
+              <div className="a11y-filter-title">{t("a11y.colorFilter")}</div>
               <div className="a11y-filter-grid">
                 {["none", "redGreen", "blueYellow", "red"].map((value) => (
                   <button
@@ -399,7 +152,7 @@ export function GlobalControls() {
                     className={settings.colorFilter === value ? "active" : ""}
                     onClick={() => setFilter(value)}
                   >
-                    {a[value]}
+                    {t(`a11y.${value}`)}
                   </button>
                 ))}
               </div>
@@ -407,39 +160,39 @@ export function GlobalControls() {
 
             <section className="a11y-section">
               <div className="a11y-section-title">
-                <span>{a.visual}</span>
+                <span>{t("a11y.visual")}</span>
                 <IconEye />
               </div>
-              <Switch label={a.contrast} active={settings.contrast} onClick={() => toggle("contrast")} icon={<IconContrast />} />
-              <Switch label={a.bigText} active={settings.bigText} onClick={() => toggle("bigText")} icon={<IconText />} />
-              <Switch label={a.highlightLinks} active={settings.highlightLinks} onClick={() => toggle("highlightLinks")} icon={<IconPalette />} />
-              <Switch label={a.underlineLinks} active={settings.underlineLinks} onClick={() => toggle("underlineLinks")} icon={<IconLink />} />
-              <Switch label={a.hideImages} active={settings.hideImages} onClick={() => toggle("hideImages")} icon={<IconEye />} />
+              <Switch label={t("a11y.contrast")} active={settings.contrast} onClick={() => toggle("contrast")} icon={<IconContrast />} />
+              <Switch label={t("a11y.bigText")} active={settings.bigText} onClick={() => toggle("bigText")} icon={<IconText />} />
+              <Switch label={t("a11y.highlightLinks")} active={settings.highlightLinks} onClick={() => toggle("highlightLinks")} icon={<IconPalette />} />
+              <Switch label={t("a11y.underlineLinks")} active={settings.underlineLinks} onClick={() => toggle("underlineLinks")} icon={<IconLink />} />
+              <Switch label={t("a11y.hideImages")} active={settings.hideImages} onClick={() => toggle("hideImages")} icon={<IconEye />} />
             </section>
 
             <section className="a11y-section">
               <div className="a11y-section-title">
-                <span>{a.text}</span>
+                <span>{t("a11y.text")}</span>
                 <IconDoc />
               </div>
-              <Switch label={a.readableFont} active={settings.readableFont} onClick={() => toggle("readableFont")} icon={<IconDoc />} />
-              <Switch label={a.lineSpacing} active={settings.lineSpacing} onClick={() => toggle("lineSpacing")} icon={<IconText />} />
-              <Switch label={a.letterSpacing} active={settings.letterSpacing} onClick={() => toggle("letterSpacing")} icon={<IconText />} />
-              <Switch label={a.alignLeft} active={settings.alignLeft} onClick={() => toggle("alignLeft")} icon={<IconText />} />
+              <Switch label={t("a11y.readableFont")} active={settings.readableFont} onClick={() => toggle("readableFont")} icon={<IconDoc />} />
+              <Switch label={t("a11y.lineSpacing")} active={settings.lineSpacing} onClick={() => toggle("lineSpacing")} icon={<IconText />} />
+              <Switch label={t("a11y.letterSpacing")} active={settings.letterSpacing} onClick={() => toggle("letterSpacing")} icon={<IconText />} />
+              <Switch label={t("a11y.alignLeft")} active={settings.alignLeft} onClick={() => toggle("alignLeft")} icon={<IconText />} />
             </section>
 
             <section className="a11y-section">
               <div className="a11y-section-title">
-                <span>{a.navigation}</span>
+                <span>{t("a11y.navigation")}</span>
                 <IconMouse />
               </div>
-              <Switch label={a.bigCursor} active={settings.bigCursor} onClick={() => toggle("bigCursor")} icon={<IconMouse />} />
-              <Switch label={a.reduceMotion} active={settings.reduceMotion} onClick={() => toggle("reduceMotion")} icon={<IconMotion />} />
-              <Switch label={a.stopAnimations} active={settings.stopAnimations} onClick={() => toggle("stopAnimations")} icon={<IconMotion />} />
+              <Switch label={t("a11y.bigCursor")} active={settings.bigCursor} onClick={() => toggle("bigCursor")} icon={<IconMouse />} />
+              <Switch label={t("a11y.reduceMotion")} active={settings.reduceMotion} onClick={() => toggle("reduceMotion")} icon={<IconMotion />} />
+              <Switch label={t("a11y.stopAnimations")} active={settings.stopAnimations} onClick={() => toggle("stopAnimations")} icon={<IconMotion />} />
             </section>
 
             <button type="button" className="a11y-reset" onClick={reset}>
-              <IconMotion /> {a.reset}
+              <IconMotion /> {t("a11y.reset")}
             </button>
           </aside>
         </div>
@@ -459,6 +212,7 @@ export function LanguageSwitcher({ className = "" }) {
           type="button"
           className={language === item.code ? "active" : ""}
           onClick={() => setLanguage(item.code)}
+          lang={item.code}
         >
           {item.label}
         </button>
