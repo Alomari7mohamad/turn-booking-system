@@ -145,33 +145,48 @@ export default function EmployeesManagement() {
           <div className="page-title">{t("emp.title")}</div>
           <div className="page-sub">{t("emp.sub")}</div>
         </div>
-        <Button onClick={openCreate}>➕ {t("emp.newEmployee")}</Button>
+        <Button onClick={openCreate}>+ {t("emp.newEmployee")}</Button>
       </div>
 
       {employees.length ? (
-        <div className="grid grid-3">
+        <div className="employees-management-grid">
           {employees.map((e) => (
-            <div key={e.id} className="card card-pad">
-              <div className="row">
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700 }}>{e.name}</div>
-                  <div className="soft" style={{ fontSize: 13 }}>{e.title || (e.role === "SECRETARY" ? t("emp.secretaryDept") : t("pb.serviceProvider"))}</div>
+            <article key={e.id} className="employee-management-card">
+              <header className="employee-management-head">
+                <div className="employee-management-identity">
+                  <strong>{e.name}</strong>
+                  <span>{e.title || (e.role === "SECRETARY" ? t("emp.secretaryDept") : t("pb.serviceProvider"))}</span>
+                </div>
+                <div className="employee-management-status">
+                  {e.role === "SECRETARY" && <Badge tone="success">{t("emp.secretaryDept")}</Badge>}
+                  {e.user && <Badge tone="primary">{t("emp.hasLogin")}</Badge>}
+                </div>
+              </header>
+
+              <div className="employee-management-content">
+                {e.phone && (
+                  <a className="employee-management-phone" href={`tel:${e.phone}`}>
+                    <span>{t("phone")}</span>
+                    <b>{e.phone}</b>
+                  </a>
+                )}
+
+                <div className="employee-management-services">
+                  <span className="employee-management-label">{t("navServices")}</span>
+                  <div>
+                    {e.serviceIds?.length ? e.serviceIds.map((id) => (
+                      <span key={id} className="badge badge-muted">{serviceName(id) || t("emp.serviceFallback")}</span>
+                    )) : <span className="employee-management-empty">{t("emp.noServicesAssigned")}</span>}
+                  </div>
                 </div>
               </div>
-              {e.role === "SECRETARY" && <div style={{ marginTop: 8 }}><Badge tone="success">{t("emp.secretaryDept")}</Badge></div>}
-              {e.phone && <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>📞 {e.phone}</div>}
-              {e.user && <div style={{ marginTop: 8 }}><Badge tone="primary">🔑 {t("emp.hasLogin")}</Badge></div>}
-              <div className="row wrap" style={{ gap: 6, marginTop: 12 }}>
-                {e.serviceIds?.length ? e.serviceIds.map((id) => (
-                  <span key={id} className="badge badge-muted">{serviceName(id) || t("emp.serviceFallback")}</span>
-                )) : <span className="soft" style={{ fontSize: 13 }}>{t("emp.noServicesAssigned")}</span>}
-              </div>
-              <div className="employee-actions row wrap" style={{ gap: 8, marginTop: 16 }}>
-                <Button size="sm" variant="ghost" onClick={() => openEdit(e)}>✎ {t("edit")}</Button>
+
+              <footer className="employee-management-actions employee-actions">
+                <Button size="sm" variant="ghost" onClick={() => openEdit(e)}>{t("edit")}</Button>
                 <Button size="sm" variant="ghost" onClick={() => openHours(e)}>{t("navWorkingHours")}</Button>
                 <Button size="sm" variant="danger" onClick={() => setConfirmDel(e.id)}>{t("delete")}</Button>
-              </div>
-            </div>
+              </footer>
+            </article>
           ))}
         </div>
       ) : (

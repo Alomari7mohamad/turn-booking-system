@@ -146,25 +146,37 @@ export default function ServicesManagement() {
       </div>
 
       {services.length ? (
-        <div className="grid grid-3">
+        <div className="services-management-grid">
           {services.map((service) => (
-            <div key={service.id} className="card card-pad">
-              <div className="row-between">
-                <div style={{ fontWeight: 700, fontSize: 16 }}>{service.name}</div>
-                {!service.isActive && <Badge tone="muted">{t("svc.disabled")}</Badge>}
+            <article key={service.id} className={`service-management-card${service.imageUrl ? " has-media" : " no-media"}`}>
+              <div className="service-management-media">
+                {service.imageUrl ? (
+                  <img src={service.imageUrl} alt={service.name} />
+                ) : (
+                  <div className="service-management-placeholder" aria-hidden="true">
+                    <span>{String(service.name || "-").trim().charAt(0)}</span>
+                  </div>
+                )}
+                <div className="service-management-media-title">
+                  <strong>{service.name}</strong>
+                  {!service.isActive && <Badge tone="muted">{t("svc.disabled")}</Badge>}
+                </div>
               </div>
-              {service.imageUrl && <img src={service.imageUrl} alt="" style={{ width: "100%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: 12, marginTop: 12 }} />}
-              {service.description && <p className="muted" style={{ fontSize: 13.5, marginTop: 6 }}>{service.description}</p>}
-              <div className="row wrap" style={{ gap: 8, marginTop: 14 }}>
-                <Badge tone="info">{service.durationMinutes} {t("minutes")}</Badge>
-                <Badge tone="success">{fmtPrice(service.price)}</Badge>
-                {service.workingHours?.length ? <Badge tone="warning">{t("svc.specialHours")}</Badge> : null}
+
+              <div className="service-management-body">
+                {service.description && <p>{service.description}</p>}
+                <div className="service-management-meta">
+                  <Badge tone="info">{service.durationMinutes} {t("minutes")}</Badge>
+                  <Badge tone="success">{fmtPrice(service.price)}</Badge>
+                  {service.workingHours?.length ? <Badge tone="warning">{t("svc.specialHours")}</Badge> : null}
+                </div>
               </div>
-              <div className="row" style={{ gap: 8, marginTop: 16 }}>
+
+              <footer className="service-management-actions">
                 <Button size="sm" variant="ghost" onClick={() => openEdit(service)}>{t("edit")}</Button>
                 <Button size="sm" variant="danger" onClick={() => setConfirmDel(service.id)}>{t("delete")}</Button>
-              </div>
-            </div>
+              </footer>
+            </article>
           ))}
         </div>
       ) : (

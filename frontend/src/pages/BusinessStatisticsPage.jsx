@@ -72,6 +72,11 @@ function paymentDateOf(appointment) {
   return new Date(appointment.paidAt || appointment.startAt);
 }
 
+function effectiveStatusOf(appointment) {
+  if (appointment.status !== "ARCHIVED") return appointment.status;
+  return String(appointment.notes || "").match(/\[ARCHIVED_FROM:([A-Z_]+)\]/)?.[1] || "ARCHIVED";
+}
+
 function inRange(date, range) {
   if (range.from && date < range.from) return false;
   if (range.to && date > range.to) return false;
@@ -215,6 +220,7 @@ export default function BusinessStatisticsPage() {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState([]);
+  const [receipts, setReceipts] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [period, setPeriod] = useState("month");
   const [customFrom, setCustomFrom] = useState(dateInput(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
@@ -223,17 +229,20 @@ export default function BusinessStatisticsPage() {
   useEffect(() => {
     let mounted = true;
     Promise.all([
-      api.listAppointments(),
+      api.listAppointments({ includeArchived: true }),
+      api.financialReceipts(),
       api.listEmployees().catch(() => ({ employees: [] })),
     ])
-      .then(([appointmentsRes, employeesRes]) => {
+      .then(([appointmentsRes, receiptsRes, employeesRes]) => {
         if (!mounted) return;
         setAppointments(appointmentsRes.appointments || []);
+        setReceipts(receiptsRes.receipts || []);
         setEmployees(employeesRes.employees || []);
       })
       .catch((err) => {
         toast.error(err.message);
         setAppointments([]);
+        setReceipts([]);
       })
       .finally(() => mounted && setLoading(false));
     return () => {
@@ -244,19 +253,26 @@ export default function BusinessStatisticsPage() {
   const range = useMemo(() => periodRange(period, customFrom, customTo), [period, customFrom, customTo]);
 
   const report = useMemo(() => {
-    const rows = appointments.filter((appointment) => {
+    const reportAppointments = appointments.map((appointment) => ({
+      ...appointment,
+      status: effectiveStatusOf(appointment),
+    }));
+    const rows = reportAppointments.filter((appointment) => {
       const date = new Date(appointment.startAt);
       return inRange(date, range);
     });
 
     const financialRows = rows.filter((item) => item.status !== "CANCELLED");
-    const paidRows = appointments.filter((item) =>
+    const paidRows = reportAppointments.filter((item) =>
       item.status !== "CANCELLED" &&
       isPaid(item) &&
       !needsRefund(item) &&
       inRange(paymentDateOf(item), range)
     );
-    const revenue = sum(paidRows, amountOf);
+    const periodReceipts = receipts.filter((receipt) => inRange(new Date(receipt.occurredAt), range));
+    const appointmentReceipts = periodReceipts.filter((receipt) => receipt.type === "APPOINTMENT_PAYMENT");
+    const revenue = sum(periodReceipts, (receipt) => Number(receipt.amount || 0));
+    const appointmentRevenue = sum(appointmentReceipts, (receipt) => Number(receipt.amount || 0));
     const unpaid = sum(financialRows.filter((item) => !isPaid(item) && item.status !== "NO_SHOW"), amountOf);
     const refund = sum(appointments.filter((item) => needsRefund(item) && inRange(paymentDateOf(item), range)), amountOf);
     const attendanceBase = rows.filter((item) => item.status !== "CANCELLED");
@@ -272,11 +288,11 @@ export default function BusinessStatisticsPage() {
       item.count += 1;
       dayMap.set(key, item);
     });
-    paidRows.forEach((appointment) => {
-      const paymentDate = paymentDateOf(appointment);
+    periodReceipts.forEach((receipt) => {
+      const paymentDate = new Date(receipt.occurredAt);
       const key = dateInput(paymentDate);
       const item = dayMap.get(key) || { key, label: compactDate(paymentDate), revenue: 0, count: 0 };
-      item.revenue += amountOf(appointment);
+      item.revenue += Number(receipt.amount || 0);
       dayMap.set(key, item);
     });
     const daily = [...dayMap.values()].sort((a, b) => a.key.localeCompare(b.key));
@@ -290,10 +306,9 @@ export default function BusinessStatisticsPage() {
     })).filter((item) => item.value > 0);
 
     const paymentMap = [
-      { label: t("stat.cash"), value: sum(paidRows.filter((item) => item.paymentMethod === "PAY_AT_STORE"), amountOf), color: PAYMENT_COLORS[0] },
-      { label: t("stat.creditCard"), value: sum(paidRows.filter((item) => item.paymentMethod === "ONLINE"), amountOf), color: PAYMENT_COLORS[1] },
-      { label: t("stat.bankTransfer"), value: 0, color: PAYMENT_COLORS[2] },
-      { label: t("stat.eWallet"), value: 0, color: PAYMENT_COLORS[3] },
+      { label: t("stat.cash"), value: sum(periodReceipts.filter((item) => item.paymentMethod === "PAY_AT_STORE"), (item) => Number(item.amount || 0)), color: PAYMENT_COLORS[0] },
+      { label: t("stat.creditCard"), value: sum(periodReceipts.filter((item) => item.paymentMethod === "ONLINE"), (item) => Number(item.amount || 0)), color: PAYMENT_COLORS[1] },
+      { label: t("cust.addBalance"), value: sum(periodReceipts.filter((item) => item.type === "BALANCE_CREDIT"), (item) => Number(item.amount || 0)), color: PAYMENT_COLORS[2] },
     ].filter((item) => item.value > 0);
 
     const employeeMap = new Map();
@@ -304,10 +319,10 @@ export default function BusinessStatisticsPage() {
       if (appointment.status !== "NO_SHOW" && appointment.status !== "CANCELLED") item.attended += 1;
       employeeMap.set(name, item);
     });
-    paidRows.forEach((appointment) => {
-      const name = appointment.employee?.name || t("stat.unspecified");
+    appointmentReceipts.forEach((receipt) => {
+      const name = receipt.employeeName || t("stat.unspecified");
       const item = employeeMap.get(name) || { name, total: 0, attended: 0, revenue: 0 };
-      item.revenue += amountOf(appointment);
+      item.revenue += Number(receipt.amount || 0);
       employeeMap.set(name, item);
     });
     const employeeRows = [...employeeMap.values()]
@@ -328,7 +343,7 @@ export default function BusinessStatisticsPage() {
       [t("stat.totalCustomers"), new Set(rows.map((item) => item.customerPhone).filter(Boolean)).size],
       [t("stat.totalAppointments"), rows.length],
       [t("stat.cancelRate"), `${pct(rows.filter((item) => item.status === "CANCELLED").length, rows.length)}%`],
-      [t("stat.avgOrderValue"), fmtPrice(Math.round(revenue / Math.max(paidRows.length, 1)))],
+      [t("stat.avgOrderValue"), fmtPrice(Math.round(appointmentRevenue / Math.max(appointmentReceipts.length, 1)))],
       [t("stat.totalServices"), new Set(rows.map((item) => item.service?.name).filter(Boolean)).size],
       [t("stat.totalStaff"), activeEmployees],
     ];
@@ -352,7 +367,7 @@ export default function BusinessStatisticsPage() {
       overview,
       recent: rows.slice().sort((a, b) => new Date(b.startAt) - new Date(a.startAt)).slice(0, 6),
     };
-  }, [appointments, range, t]);
+  }, [appointments, receipts, range, t]);
 
   if (loading) return <Spinner page />;
 

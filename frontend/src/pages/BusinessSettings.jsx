@@ -8,38 +8,18 @@ import { useLanguage } from "../context/LanguageContext.jsx";
 
 function Toggle({ checked, onChange, label, hint }) {
   return (
-    <label className="row-between" style={{ cursor: "pointer", padding: "12px 0", borderBottom: "1px solid var(--border)" }}>
+    <button
+      type="button"
+      className={`business-settings-toggle${checked ? " is-active" : ""}`}
+      aria-pressed={checked}
+      onClick={() => onChange(!checked)}
+    >
       <div>
-        <div style={{ fontWeight: 600 }}>{label}</div>
-        {hint && <div className="soft" style={{ fontSize: 13 }}>{hint}</div>}
+        <strong>{label}</strong>
+        {hint && <span>{hint}</span>}
       </div>
-      <span
-        onClick={() => onChange(!checked)}
-        style={{
-          width: 46,
-          height: 26,
-          borderRadius: 999,
-          flexShrink: 0,
-          background: checked ? "var(--primary)" : "var(--border-strong)",
-          position: "relative",
-          transition: "background .15s",
-        }}
-      >
-        <span
-          style={{
-            position: "absolute",
-            top: 3,
-            [checked ? "left" : "right"]: 3,
-            width: 20,
-            height: 20,
-            borderRadius: "50%",
-            background: "#fff",
-            transition: "all .15s",
-            boxShadow: "0 1px 3px rgba(0,0,0,.2)",
-          }}
-        />
-      </span>
-    </label>
+      <span className="business-settings-switch" aria-hidden="true"><i /></span>
+    </button>
   );
 }
 
@@ -68,6 +48,7 @@ export default function BusinessSettings() {
         onlinePaymentEnabled: r.business.onlinePaymentEnabled,
         payAtStoreEnabled: r.business.payAtStoreEnabled,
         customerHubEnabled: r.business.customerHubEnabled !== false,
+        requiresAppointmentApproval: r.business.requiresAppointmentApproval !== false,
       });
       setSlug(r.business.slug);
     });
@@ -122,26 +103,37 @@ export default function BusinessSettings() {
 
       <form id="business-settings-form" onSubmit={save} className="business-settings-form">
         <div className="settings-grid">
-          <div className="card">
+          <section className="card settings-primary-card">
             <div className="card-header"><h3 className="card-title">{t("bs.basicData")}</h3></div>
-            <div className="card-pad col" style={{ gap: 16 }}>
-              <Field label={t("bs.businessName")}><Input value={form.name} onChange={set("name")} required /></Field>
-              <Field label={t("bs.bookingLink")} hint={t("bs.bookingLinkHint")}>
-                <div className="row" style={{ gap: 10 }}>
-                  <Input value={bookingUrl} readOnly onFocus={(event) => event.target.select()} />
-                  <Button type="button" variant="secondary" onClick={copyBookingUrl}>{t("copy")}</Button>
-                </div>
-                {copiedBookingUrl && <div className="copy-inline-message">{t("bd.bookingLinkCopied")}</div>}
-              </Field>
-              <div className="grid grid-2">
+            <div className="card-pad business-settings-fields">
+              <div className="business-settings-identity-row">
+                <Field label={t("bs.businessName")}><Input value={form.name} onChange={set("name")} required /></Field>
+                <Field label={t("bs.bookingLink")}>
+                  <div className="business-booking-link">
+                    <Input value={bookingUrl} readOnly onFocus={(event) => event.target.select()} />
+                    <Button type="button" variant="secondary" onClick={copyBookingUrl}>{t("copy")}</Button>
+                  </div>
+                  {copiedBookingUrl && <div className="copy-inline-message">{t("bd.bookingLinkCopied")}</div>}
+                </Field>
+                <Field label={t("bs.brandColor")}>
+                  <div className="business-color-field">
+                    <Input className="color-picker" type="color" value={form.brandColor} onChange={set("brandColor")} />
+                    <span>{form.brandColor}</span>
+                  </div>
+                </Field>
+              </div>
+
+              <div className="business-settings-contact-row">
                 <Field label={t("email")}><Input type="email" value={form.email} onChange={set("email")} /></Field>
+                <Field label={t("bs.address")}><Input value={form.address} onChange={set("address")} /></Field>
                 <Field label={t("phone")}><Input value={form.phone} onChange={set("phone")} /></Field>
               </div>
-              <Field label={t("bs.address")}><Input value={form.address} onChange={set("address")} /></Field>
+
               <Field label={t("bs.mapUrl")} hint={t("bs.mapUrlHint")}>
                 <Input value={form.mapUrl} onChange={set("mapUrl")} placeholder={t("bs.mapUrlPlaceholder")} />
               </Field>
-              <div className="grid grid-2">
+
+              <div className="business-settings-media-grid">
                 <Field label={t("storeLogo")}>
                   <LogoPicker
                     value={form.logoUrl}
@@ -151,6 +143,7 @@ export default function BusinessSettings() {
                     changeText={t("lp.changeLogo")}
                     removeText={t("lp.removeLogo")}
                     previewAlt={t("lp.logoAlt")}
+                    compact
                   />
                 </Field>
                 <Field label={t("bs.heroImage")}>
@@ -163,53 +156,59 @@ export default function BusinessSettings() {
                     removeText={t("svc.removeImage")}
                     previewAlt={t("bs.heroImage")}
                     imageOptions={{ maxSize: 1100, minSize: 360, quality: 0.8, maxBytes: 520 * 1024 }}
+                    compact
                   />
                 </Field>
               </div>
-              <div className="grid grid-2">
-                <Field label={t("bs.brandColor")}>
-                  <div className="row" style={{ gap: 10 }}>
-                    <Input className="color-picker" type="color" value={form.brandColor} onChange={set("brandColor")} />
-                    <span className="soft">{form.brandColor}</span>
+            </div>
+          </section>
+
+          <div className="settings-side-column">
+            <section className="card settings-controls-card">
+              <div className="card-header"><h3 className="card-title">{t("settingsControls")}</h3></div>
+              <div className="card-pad settings-controls-grid">
+                <section className="settings-control-section">
+                  <h4>{t("bs.paymentSettings")}</h4>
+                  <div className="business-settings-toggles">
+                    <Toggle
+                      label={t("bs.onlinePayment")}
+                      hint={t("bs.onlinePaymentHint")}
+                      checked={form.onlinePaymentEnabled}
+                      onChange={(value) => setVal("onlinePaymentEnabled", value)}
+                    />
+                    <Toggle
+                      label={t("pb.payAtStore")}
+                      hint={t("bs.payAtStoreHint")}
+                      checked={form.payAtStoreEnabled}
+                      onChange={(value) => setVal("payAtStoreEnabled", value)}
+                    />
+                    {noMethod && <div className="error-text">{t("bs.needPaymentInline")}</div>}
                   </div>
-                </Field>
+                </section>
+
+                <section className="settings-control-section">
+                  <h4>{t("bs.customerHub")}</h4>
+                  <Toggle
+                    label={t("bs.enableHub")}
+                    hint={t("bs.enableHubHint")}
+                    checked={form.customerHubEnabled}
+                    onChange={(value) => setVal("customerHubEnabled", value)}
+                  />
+                </section>
+
+                <section className="settings-control-section">
+                  <h4>{t("bookingApprovalPolicy")}</h4>
+                  <Toggle
+                    label={t("bookingApprovalControl")}
+                    hint={form.requiresAppointmentApproval ? t("bookingApprovalManualHint") : t("bookingApprovalAutoHint")}
+                    checked={form.requiresAppointmentApproval}
+                    onChange={(value) => setVal("requiresAppointmentApproval", value)}
+                  />
+                </section>
               </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-header"><h3 className="card-title">{t("bs.paymentSettings")}</h3></div>
-            <div className="card-pad">
-              <Toggle
-                label={t("bs.onlinePayment")}
-                hint={t("bs.onlinePaymentHint")}
-                checked={form.onlinePaymentEnabled}
-                onChange={(value) => setVal("onlinePaymentEnabled", value)}
-              />
-              <Toggle
-                label={t("pb.payAtStore")}
-                hint={t("bs.payAtStoreHint")}
-                checked={form.payAtStoreEnabled}
-                onChange={(value) => setVal("payAtStoreEnabled", value)}
-              />
-              {noMethod && <div className="error-text mt-2">{t("bs.needPaymentInline")}</div>}
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-header"><h3 className="card-title">{t("bs.customerHub")}</h3></div>
-            <div className="card-pad">
-              <Toggle
-                label={t("bs.enableHub")}
-                hint={t("bs.enableHubHint")}
-                checked={form.customerHubEnabled}
-                onChange={(value) => setVal("customerHubEnabled", value)}
-              />
-            </div>
+            </section>
           </div>
         </div>
-
-        <div className="settings-actions"><Button type="submit" loading={saving}>{t("wh.saveChanges")}</Button></div>
       </form>
     </>
   );

@@ -10,6 +10,19 @@ import { LogoPicker } from "../components/LogoPicker.jsx";
 import { BellIcon } from "../components/Icons.jsx";
 
 const planLabel = (plan, t) => (plan === "YEARLY" ? t("yearly") : t("monthly"));
+const ADMIN_SUBSCRIPTION_ALERTS_KEY = "tb_admin_subscription_alert_states";
+
+function loadAdminSubscriptionAlertStates() {
+  try {
+    return JSON.parse(localStorage.getItem(ADMIN_SUBSCRIPTION_ALERTS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function subscriptionAlertKey(business) {
+  return `${business.id}:${toDateInput(business.subscription?.endsAt)}`;
+}
 
 function toDateInput(value) {
   if (!value) return "";
@@ -164,10 +177,23 @@ export default function BusinessesManagement() {
   const [saving, setSaving] = useState(false);
   const [confirmToggle, setConfirmToggle] = useState(null);
   const [showAlerts, setShowAlerts] = useState(false);
+  const [subscriptionAlertStates, setSubscriptionAlertStates] = useState(loadAdminSubscriptionAlertStates);
   const [showOwnerPassword, setShowOwnerPassword] = useState(false);
 
   const load = () => adminApi.listBusinesses(search).then((r) => setList(r.businesses));
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    localStorage.setItem(ADMIN_SUBSCRIPTION_ALERTS_KEY, JSON.stringify(subscriptionAlertStates));
+  }, [subscriptionAlertStates]);
+  useEffect(() => {
+    const syncAlertStates = (event) => {
+      if (event.key === ADMIN_SUBSCRIPTION_ALERTS_KEY) {
+        setSubscriptionAlertStates(loadAdminSubscriptionAlertStates());
+      }
+    };
+    window.addEventListener("storage", syncAlertStates);
+    return () => window.removeEventListener("storage", syncAlertStates);
+  }, []);
 
   const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
   const setCreateSubscription = (patch) =>
@@ -344,6 +370,30 @@ export default function BusinessesManagement() {
     const daysLeft = Math.ceil((end - today) / 86400000);
     return daysLeft >= 0 && daysLeft <= 7;
   });
+  const visibleExpiringSoon = expiringSoon.filter((business) => (
+    subscriptionAlertStates[subscriptionAlertKey(business)] !== "deleted"
+  ));
+  const unreadExpiringSoon = visibleExpiringSoon.filter((business) => (
+    subscriptionAlertStates[subscriptionAlertKey(business)] !== "read"
+  ));
+  const markAllSubscriptionAlertsRead = () => {
+    setSubscriptionAlertStates((current) => {
+      const next = { ...current };
+      visibleExpiringSoon.forEach((business) => {
+        next[subscriptionAlertKey(business)] = "read";
+      });
+      return next;
+    });
+  };
+  const deleteAllSubscriptionAlerts = () => {
+    setSubscriptionAlertStates((current) => {
+      const next = { ...current };
+      visibleExpiringSoon.forEach((business) => {
+        next[subscriptionAlertKey(business)] = "deleted";
+      });
+      return next;
+    });
+  };
   const isExpiringSoon = (business) => expiringSoon.some((item) => item.id === business.id);
 
   return (
@@ -357,24 +407,33 @@ export default function BusinessesManagement() {
           <div className="notifications-menu">
             <Button
               className="notification-bell"
-              variant={expiringSoon.length ? "primary" : "ghost"}
+              variant={unreadExpiringSoon.length ? "primary" : "ghost"}
               onClick={() => setShowAlerts((value) => !value)}
               aria-label={t("notifications")}
               title={t("notifications")}
             >
               <BellIcon />
-              {expiringSoon.length ? <span className="notification-count">{fmtNumber(expiringSoon.length)}</span> : null}
+              {unreadExpiringSoon.length ? <span className="notification-count">{fmtNumber(unreadExpiringSoon.length)}</span> : null}
             </Button>
             {showAlerts && (
               <div className="notifications-popover">
-                <div style={{ fontWeight: 800, marginBottom: 8 }}>{t("subscriptionsEndingSoon")}</div>
-                {expiringSoon.length ? (
-                  expiringSoon.map((business) => {
+                <div className="row-between" style={{ marginBottom: 8, gap: 8 }}>
+                  <div style={{ fontWeight: 800 }}>{t("subscriptionsEndingSoon")}</div>
+                  {visibleExpiringSoon.length ? (
+                    <div className="row" style={{ gap: 6 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={markAllSubscriptionAlertsRead}>{t("markAllRead")}</button>
+                      <button className="btn btn-ghost btn-sm" onClick={deleteAllSubscriptionAlerts}>{t("deleteAll")}</button>
+                    </div>
+                  ) : null}
+                </div>
+                {visibleExpiringSoon.length ? (
+                  visibleExpiringSoon.map((business) => {
                     const end = new Date(business.subscription.endsAt);
                     end.setHours(0, 0, 0, 0);
                     const daysLeft = Math.ceil((end - today) / 86400000);
+                    const isRead = subscriptionAlertStates[subscriptionAlertKey(business)] === "read";
                     return (
-                      <div key={business.id} className="notification-row">
+                      <div key={subscriptionAlertKey(business)} className={`notification-row ${isRead ? "is-read" : ""}`}>
                         <span>{business.name}</span>
                         <span className="soft">{daysLeft === 0 ? t("endsToday") : `${t("daysLeft")} ${fmtNumber(daysLeft)} ${t("days")}`}</span>
                       </div>

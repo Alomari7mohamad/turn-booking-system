@@ -67,6 +67,7 @@ function applyA11y(settings) {
 export function GlobalControls() {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [settings, setSettings] = useState(loadA11y);
 
   useEffect(() => {
@@ -82,6 +83,30 @@ export function GlobalControls() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  useEffect(() => {
+    const update = () => {
+      const top = Math.max(
+        window.scrollY || 0,
+        document.documentElement.scrollTop || 0,
+        document.body.scrollTop || 0
+      );
+      setShowScrollTop(top > 320);
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    document.addEventListener("scroll", update, { passive: true, capture: true });
+    return () => {
+      window.removeEventListener("scroll", update);
+      document.removeEventListener("scroll", update, { capture: true });
+    };
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.documentElement.scrollTo({ top: 0, behavior: "smooth" });
+    document.body.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const toggle = (key) => setSettings((current) => ({ ...current, [key]: !current[key] }));
   const setFilter = (value) => setSettings((current) => ({ ...current, colorFilter: value }));
@@ -104,6 +129,16 @@ export function GlobalControls() {
           title={t("accessibility")}
         >
           <AccessIcon />
+        </button>
+        <button
+          type="button"
+          className={`scroll-top-floating-button${showScrollTop ? " is-visible" : ""}`}
+          onClick={scrollToTop}
+          aria-label={t("scrollToTop")}
+          title={t("scrollToTop")}
+          tabIndex={showScrollTop ? 0 : -1}
+        >
+          <UpIcon />
         </button>
       </div>
 
@@ -240,6 +275,14 @@ function AccessIcon() {
     <Svg>
       <circle cx="12" cy="4.5" r="2.2" />
       <path d="M4.8 8.1c4.6-1.5 9.8-1.5 14.4 0 .8.3 1.2 1.1 1 1.9-.3.8-1.1 1.2-1.9 1a20.6 20.6 0 0 0-4.8-.9v3.1l2.7 6.1c.3.8 0 1.7-.8 2-.8.3-1.7 0-2-.8L12 17.2l-1.4 3.3c-.3.8-1.2 1.1-2 .8-.8-.3-1.1-1.2-.8-2l2.7-6.1v-3.1c-1.6.1-3.2.4-4.8.9-.8.2-1.6-.2-1.9-1-.2-.8.2-1.6 1-1.9Z" />
+    </Svg>
+  );
+}
+
+function UpIcon() {
+  return (
+    <Svg>
+      <path d="m5.5 14.5 6.5-6.5 6.5 6.5-1.8 1.8-4.7-4.7-4.7 4.7-1.8-1.8Z" />
     </Svg>
   );
 }

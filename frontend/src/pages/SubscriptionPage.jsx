@@ -12,11 +12,13 @@ export default function SubscriptionPage() {
   if (!biz) return <Spinner page />;
 
   const sub = biz.subscriptions?.[0];
-  const daysLeft = sub ? Math.max(0, Math.ceil((new Date(sub.endsAt) - new Date()) / 86400000)) : 0;
-  const active = sub && new Date(sub.endsAt) > new Date();
+  const remainingMs = sub ? new Date(sub.endsAt) - new Date() : 0;
+  const daysLeft = sub ? Math.max(0, Math.ceil(remainingMs / 86400000)) : 0;
+  const active = sub && remainingMs > 0;
+  const expiringSoon = Boolean(sub && remainingMs < 7 * 86400000);
 
   return (
-    <>
+    <div className={`subscription-page${expiringSoon ? " is-expiring" : ""}`}>
       <div className="page-head">
         <div>
           <div className="page-title">{t("subscription")}</div>
@@ -26,7 +28,7 @@ export default function SubscriptionPage() {
 
       {sub ? (
         <>
-          <div className="card" style={{ background: "var(--gradient)", color: "#fff", border: "none", marginBottom: 18 }}>
+          <div className="card subscription-plan-card">
             <div className="card-pad">
               <div className="row-between wrap">
                 <div>
@@ -57,7 +59,7 @@ export default function SubscriptionPage() {
           <p className="muted mt-2">{t("activateSubscriptionHint")}</p>
         </div>
       )}
-    </>
+    </div>
   );
 }
 

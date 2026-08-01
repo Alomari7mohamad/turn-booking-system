@@ -22,9 +22,9 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password, remember = false) => {
     const res = await authApi.login({ email, password });
-    tokenStore.set(res.token);
+    tokenStore.set(res.token, remember);
     setUser(res.user);
     return res.user;
   }, []);

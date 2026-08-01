@@ -171,8 +171,11 @@ export default function StaffDashboard() {
                         </div>
                       </td>
                       <td>
-                        {a.status === "COMPLETED" && user?.business?.reviewsEnabled && !a.review ? (
-                          <Button size="sm" onClick={() => sendReviewLink(a)}>{t("sd.sendReview")}</Button>
+                        {a.status === "COMPLETED" &&
+                        user?.business?.reviewsEnabled &&
+                        !a.review &&
+                        Date.now() >= new Date(a.endAt).getTime() + (2 * 60 * 1000) ? (
+                          <Button size="sm" onClick={() => sendReviewLink(a)}>{t("ap.sendReviewWhatsapp")}</Button>
                         ) : a.paymentStatus === "PAID" || a.status === "COMPLETED" ? (
                           <Badge tone="success">{t("sd.customerAttended")}</Badge>
                         ) : isSecretary && manualApproval && isPending ? (

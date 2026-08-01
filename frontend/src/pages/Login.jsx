@@ -22,6 +22,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const copy = {
@@ -41,7 +42,7 @@ export default function Login() {
     event.preventDefault();
     setLoading(true);
     try {
-      const user = await login(email, password);
+      const user = await login(email, password, remember);
       toast.success(`${t("welcome")} ${user.name}`);
       navigate("/");
     } catch (err) {
@@ -110,12 +111,19 @@ export default function Login() {
             </Field>
 
             <div className="auth-form-options">
-              <span />
+              <label className="auth-remember-option">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(event) => setRemember(event.target.checked)}
+                />
+                <span>{t("login.remember")}</span>
+              </label>
               <Link to="/forgot-password">{copy.forgot}</Link>
             </div>
 
             <Button type="submit" size="lg" block loading={loading}>
-              {t("login")}
+              {t("login.submit")}
             </Button>
           </form>
 

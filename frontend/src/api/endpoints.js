@@ -33,8 +33,13 @@ const createBusinessScopedApi = (prefix) => ({
   update: (data) => api.patch(`${prefix}/me`, data).then((r) => r.data),
   dashboard: () => api.get(`${prefix}/dashboard`).then((r) => r.data),
   customers: (params) => api.get(`${prefix}/customers`, { params }).then((r) => r.data),
+  financialReceipts: (params) => api.get(`${prefix}/financial-receipts`, { params }).then((r) => r.data),
   updateCustomerSettings: (data) =>
     api.patch(`${prefix}/customers/settings`, data).then((r) => r.data),
+  updateCustomer: (id, data) =>
+    api.patch(`${prefix}/customers/${id}`, data).then((r) => r.data),
+  updateCustomerBalance: (id, data) =>
+    api.patch(`${prefix}/customers/${id}/balance`, data).then((r) => r.data),
   customerDetails: (phone, params) =>
     api.get(`${prefix}/customers/${encodeURIComponent(phone)}/details`, { params }).then((r) => r.data),
   customerReviews: (phone) =>
@@ -71,8 +76,8 @@ const createBusinessScopedApi = (prefix) => ({
   requeue: (id, data) =>
     api.patch(`${prefix}/appointments/${id}/requeue`, data).then((r) => r.data),
   cancelAppointment: (id) => api.delete(`${prefix}/appointments/${id}`).then((r) => r.data),
-  updateAppointmentPayment: (id, paymentStatus) =>
-    api.patch(`${prefix}/appointments/${id}/payment`, { paymentStatus }).then((r) => r.data),
+  updateAppointmentPayment: (id, paymentStatus, receivedAmount, balanceUsedAmount = 0) =>
+    api.patch(`${prefix}/appointments/${id}/payment`, { paymentStatus, receivedAmount, balanceUsedAmount }).then((r) => r.data),
   secretaryToday: (params) =>
     api.get(`${prefix}/secretary/today`, { params }).then((r) => r.data),
   openSecretarySession: (pin) =>
@@ -96,22 +101,26 @@ export const staffApi = {
   updateStatus: (id, status) =>
     api.patch(`/staff/appointments/${id}/status`, { status }).then((r) => r.data),
   createReviewLink: (id) => api.post(`/staff/appointments/${id}/review-link`).then((r) => r.data),
-  updatePayment: (id, paymentStatus) =>
-    api.patch(`/staff/appointments/${id}/payment`, { paymentStatus }).then((r) => r.data),
+  updatePayment: (id, paymentStatus, receivedAmount, balanceUsedAmount = 0) =>
+    api.patch(`/staff/appointments/${id}/payment`, { paymentStatus, receivedAmount, balanceUsedAmount }).then((r) => r.data),
   requeueOptions: (id, params) =>
     api.get(`/staff/appointments/${id}/requeue-options`, { params }).then((r) => r.data),
   requeue: (id, data) =>
     api.patch(`/staff/appointments/${id}/requeue`, data).then((r) => r.data),
 };
 
+const customerAuth = (token) => ({ headers: { "X-Customer-Token": token } });
+
 export const publicApi = {
   business: (slug) => api.get(`/public/${slug}`).then((r) => r.data),
-  availability: (slug, params) =>
-    api.get(`/public/${slug}/availability`, { params }).then((r) => r.data),
-  findAppointmentByPhone: (slug, phone, includePast = false) =>
-    api.get(`/public/${slug}/appointments/by-phone`, { params: { phone, includePast } }).then((r) => r.data),
-  updateCustomerProfile: (slug, data) =>
-    api.patch(`/public/${slug}/customer-profile`, data).then((r) => r.data),
+  availability: (slug, params, token) =>
+    api.get(`/public/${slug}/availability`, { params, ...(token ? customerAuth(token) : {}) }).then((r) => r.data),
+  availabilityCalendar: (slug, params, token) =>
+    api.get(`/public/${slug}/availability-calendar`, { params, ...(token ? customerAuth(token) : {}) }).then((r) => r.data),
+  findAppointmentByPhone: (slug, phone, includePast = false, token) =>
+    api.get(`/public/${slug}/appointments/by-phone`, { params: { phone, includePast }, ...customerAuth(token) }).then((r) => r.data),
+  updateCustomerProfile: (slug, data, token) =>
+    api.patch(`/public/${slug}/customer-profile`, data, customerAuth(token)).then((r) => r.data),
   printTicket: (slug, phone) =>
     api.get(`/public/${slug}/print-ticket`, { params: { phone } }).then((r) => r.data),
   sendPhoneVerification: (slug, phone) =>
@@ -119,11 +128,11 @@ export const publicApi = {
   confirmPhoneVerification: (slug, data) =>
     api.post(`/public/${slug}/phone-verifications/confirm`, data).then((r) => r.data),
   book: (slug, data) => api.post(`/public/${slug}/appointments`, data).then((r) => r.data),
-  cancelAppointment: (slug, id, phone) =>
-    api.delete(`/public/${slug}/appointments/${id}`, { data: { phone } }).then((r) => r.data),
-  appointmentStatus: (id) => api.get(`/public/appointments/${id}/status`).then((r) => r.data),
-  respondDelay: (id, response) =>
-    api.post(`/public/appointments/${id}/delay-response`, { response }).then((r) => r.data),
+  cancelAppointment: (slug, id, phone, token) =>
+    api.delete(`/public/${slug}/appointments/${id}`, { data: { phone }, ...customerAuth(token) }).then((r) => r.data),
+  appointmentStatus: (id, token) => api.get(`/public/appointments/${id}/status`, customerAuth(token)).then((r) => r.data),
+  respondDelay: (id, response, token) =>
+    api.post(`/public/appointments/${id}/delay-response`, { response, token }).then((r) => r.data),
   review: (token) => api.get(`/public/reviews/${token}`).then((r) => r.data),
   submitReview: (token, data) => api.post(`/public/reviews/${token}`, data).then((r) => r.data),
 };

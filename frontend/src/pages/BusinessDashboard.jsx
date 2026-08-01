@@ -11,16 +11,46 @@ export default function BusinessDashboard() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { api, basePath, business, isAdminManaging } = useBusinessManage();
+  const currentBusiness = business || user?.business;
+  const manualApproval = currentBusiness?.requiresAppointmentApproval !== false;
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState("");
+  const [appointmentsView, setAppointmentsView] = useState("upcoming");
 
-  const load = () => api.dashboard().then(setData).catch(() => setData({ stats: {}, upcoming: [] }));
+  const load = async () => {
+    const now = new Date();
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    try {
+      const requests = [
+        api.dashboard(),
+        api.listAppointments({ from: today, to: today }),
+      ];
+      if (manualApproval) requests.push(api.listAppointments({ status: "PENDING" }));
+      const [dashboardResult, todayResult, pendingResult] = await Promise.all(requests);
+      setData({
+        ...dashboardResult,
+        todayAppointments: todayResult.appointments || [],
+        pendingAppointments: pendingResult?.appointments || [],
+      });
+    } catch {
+      setData({ stats: {}, todayAppointments: [], pendingAppointments: [] });
+    }
+  };
 
   useEffect(() => {
     load();
     const timer = setInterval(load, 5000);
     return () => clearInterval(timer);
-  }, [api]);
+  }, [api, manualApproval]);
+
+  useEffect(() => {
+    if (!manualApproval) setAppointmentsView("upcoming");
+  }, [manualApproval]);
 
   const copyLink = async (url, key = "booking") => {
     try {
@@ -44,7 +74,6 @@ export default function BusinessDashboard() {
 
   if (!data) return <Spinner page />;
   const s = data.stats || {};
-  const currentBusiness = business || user?.business;
   const bookingUrl = currentBusiness ? `${location.origin}/book/${currentBusiness.slug}` : "";
   const printUrl = currentBusiness?.slug && currentBusiness?.printScreenEnabled !== false ? `${location.origin}/print/${currentBusiness.slug}` : "";
   const statusLabel = (status) => ({
@@ -54,6 +83,16 @@ export default function BusinessDashboard() {
     CANCELLED: t("statusCancelled"),
     NO_SHOW: t("statusNoShow"),
   }[status] || status);
+  const now = new Date();
+  const upcomingAppointments = (data.todayAppointments || [])
+    .filter((appointment) => appointment.status === "CONFIRMED" && new Date(appointment.startAt) >= now)
+    .sort((first, second) => new Date(first.startAt) - new Date(second.startAt));
+  const pendingAppointments = (data.pendingAppointments || [])
+    .filter((appointment) => appointment.status === "PENDING" && new Date(appointment.startAt) >= now)
+    .sort((first, second) => new Date(first.startAt) - new Date(second.startAt));
+  const visibleAppointments = appointmentsView === "confirmations"
+    ? pendingAppointments
+    : upcomingAppointments;
 
   return (
     <>
@@ -62,7 +101,7 @@ export default function BusinessDashboard() {
           <div className="page-title">
             {isAdminManaging ? `${t("managingBusiness")} ${currentBusiness?.name || t("businessFallback")}` : `${t("welcomeUser")} ${user?.name}`}
           </div>
-          <div className="page-sub">{isAdminManaging ? t("remoteControlHelp") : t("todayActivitySummary")}</div>
+          {isAdminManaging && <div className="page-sub">{t("remoteControlHelp")}</div>}
         </div>
       </div>
 
@@ -71,7 +110,6 @@ export default function BusinessDashboard() {
           <div className="row-between wrap" style={{ gap: 14 }}>
             <div>
               <div style={{ fontWeight: 700 }}>{t("publicBookingLink")}</div>
-              <div className="muted" style={{ fontSize: 13.5 }}>{t("shareBookingLink")}</div>
             </div>
             <div className="row">
               <code style={{ background: "#fff", padding: "8px 12px", borderRadius: 8, fontSize: 13 }}>/book/{currentBusiness.slug}</code>
@@ -104,42 +142,76 @@ export default function BusinessDashboard() {
         <StatCard icon="✂️" value={fmtNumber(s.services)} label={t("navServices")} tone="warning" />
       </div>
 
-      {currentBusiness?.requiresAppointmentApproval !== false && <div className="card mt-3">
+      <div className="card mt-3 dashboard-appointments">
         <div className="card-header">
-          <h3 className="card-title">{t("upcomingAppointments")}</h3>
+          <div>
+            <h3 className="card-title">
+              {appointmentsView === "confirmations" ? t("dashboard.confirmations") : t("dashboard.todayUpcoming")}
+            </h3>
+            {manualApproval && (
+              <div className="dashboard-appointments-tabs" role="tablist" aria-label={t("dashboard.appointmentViews")}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={appointmentsView === "upcoming"}
+                  className={appointmentsView === "upcoming" ? "active" : ""}
+                  onClick={() => setAppointmentsView("upcoming")}
+                >
+                  {t("dashboard.todayUpcoming")}
+                  <span>{fmtNumber(upcomingAppointments.length)}</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={appointmentsView === "confirmations"}
+                  className={appointmentsView === "confirmations" ? "active" : ""}
+                  onClick={() => setAppointmentsView("confirmations")}
+                >
+                  {t("dashboard.confirmations")}
+                  <span>{fmtNumber(pendingAppointments.length)}</span>
+                </button>
+              </div>
+            )}
+          </div>
           <Link to={`${basePath}/appointments`} className="muted" style={{ fontSize: 13 }}>{t("allBookings")}</Link>
         </div>
-        {data.upcoming?.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("customer")}</th>
-                  <th>{t("service")}</th>
-                  <th>{t("employee")}</th>
-                  <th>{t("appointmentTime")}</th>
-                  <th>{t("status")}</th>
-                  <th>{t("action")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.upcoming.map((a) => (
-                  <tr key={a.id}>
-                    <td style={{ fontWeight: 600 }}>{a.customerName}<div className="soft" style={{ fontSize: 12 }}>{a.customerPhone}</div></td>
-                    <td>{a.service?.name}</td>
-                    <td>{a.employee?.name}</td>
-                    <td>{fmtDate(a.startAt)} · {fmtTime(a.startAt)}</td>
-                    <td><Badge tone={STATUS_META[a.status]?.tone}>{statusLabel(a.status)}</Badge></td>
-                    <td>{a.status === "PENDING" ? <div className="row" style={{ gap: 6 }}><Button size="sm" onClick={() => changeStatus(a.id, "CONFIRMED")}>{t("accept")}</Button><Button size="sm" variant="danger" onClick={() => changeStatus(a.id, "CANCELLED")}>{t("reject")}</Button></div> : <span className="soft">-</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {visibleAppointments.length ? (
+          <div className="dashboard-appointment-list">
+            {visibleAppointments.map((appointment, index) => (
+              <article className="dashboard-appointment-row" key={appointment.id}>
+                <div className="dashboard-appointment-time">
+                  <strong>{fmtTime(appointment.startAt)}</strong>
+                  <span>{fmtTime(appointment.endAt)}</span>
+                  <span>{fmtDate(appointment.startAt)}</span>
+                  {appointmentsView === "upcoming" && index === 0 && (
+                    <small>{t("dashboard.nearestAppointment")}</small>
+                  )}
+                </div>
+                <div className="dashboard-appointment-customer">
+                  <strong>{appointment.customerName}</strong>
+                  <span>{appointment.customerPhone}</span>
+                </div>
+                <div className="dashboard-appointment-meta">
+                  <strong>{appointment.service?.name}</strong>
+                  <span>{appointment.employee?.name}</span>
+                </div>
+                {appointmentsView === "confirmations" ? (
+                  <div className="dashboard-appointment-actions">
+                    <Button size="sm" onClick={() => changeStatus(appointment.id, "CONFIRMED")}>{t("accept")}</Button>
+                    <Button size="sm" variant="danger" onClick={() => changeStatus(appointment.id, "CANCELLED")}>{t("reject")}</Button>
+                  </div>
+                ) : (
+                  <Badge tone={STATUS_META[appointment.status]?.tone}>{statusLabel(appointment.status)}</Badge>
+                )}
+              </article>
+            ))}
           </div>
         ) : (
-          <EmptyState icon="📅" title={t("noUpcomingAppointments")} hint={t("newBookingsAppearHere")} />
+          <EmptyState
+            title={appointmentsView === "confirmations" ? t("dashboard.noConfirmations") : t("dashboard.noTodayUpcoming")}
+          />
         )}
-      </div>}
+      </div>
     </>
   );
 }

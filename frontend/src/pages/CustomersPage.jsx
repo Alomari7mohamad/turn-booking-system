@@ -61,6 +61,12 @@ export default function CustomersPage() {
   const [details, setDetails] = useState(null);
   const [detailsFrom, setDetailsFrom] = useState("");
   const [detailsTo, setDetailsTo] = useState("");
+  const [editTarget, setEditTarget] = useState(null);
+  const [editForm, setEditForm] = useState({ name: "", phone: "", email: "", dateOfBirth: "" });
+  const [editSaving, setEditSaving] = useState(false);
+  const [balanceTarget, setBalanceTarget] = useState(null);
+  const [balanceValue, setBalanceValue] = useState("");
+  const [balanceSaving, setBalanceSaving] = useState(false);
 
   const load = () => {
     setData(null);
@@ -127,6 +133,58 @@ export default function CustomersPage() {
     } catch (err) {
       toast.error(err.message);
       setDetails({ appointments: [], summary: {} });
+    }
+  };
+
+  const openEdit = (customer) => {
+    setEditTarget(customer);
+    setEditForm({
+      name: customer.name || "",
+      phone: customer.phone || "",
+      email: customer.email || "",
+      dateOfBirth: customer.dateOfBirth ? String(customer.dateOfBirth).slice(0, 10) : "",
+    });
+  };
+
+  const saveCustomer = async (event) => {
+    event.preventDefault();
+    if (!editTarget) return;
+    setEditSaving(true);
+    try {
+      await api.updateCustomer(editTarget.id, editForm);
+      toast.success(t("customerEdit.updated"));
+      setEditTarget(null);
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const openBalance = (customer) => {
+    setBalanceTarget(customer);
+    setBalanceValue("");
+  };
+
+  const saveBalance = async (event) => {
+    event.preventDefault();
+    if (!balanceTarget) return;
+    const amount = Number(balanceValue);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error(t("cust.positiveAmountRequired"));
+      return;
+    }
+    setBalanceSaving(true);
+    try {
+      await api.updateCustomerBalance(balanceTarget.id, { amount });
+      toast.success(t("cust.balanceSaved"));
+      setBalanceTarget(null);
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBalanceSaving(false);
     }
   };
 
@@ -198,54 +256,156 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="card mt-3">
+      <section className="customers-results mt-3">
         {customers.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("customer")}</th>
-                  <th>{t("phone")}</th>
-                  <th>{t("cust.monthVisits")}</th>
-                  <th>{t("cust.monthPaid")}</th>
-                  <th>{t("cust.allVisits")}</th>
-                  <th>{t("cust.allPaid")}</th>
-                  <th>{t("cust.points")}</th>
-                  <th>{t("cust.lastVisit")}</th>
-                  <th>{t("actions")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customers.map((customer) => (
-                  <tr key={customer.id}>
-                    <td style={{ fontWeight: 800 }}>
-                      {customer.name}
-                      {customer.email && <div className="soft">{customer.email}</div>}
-                    </td>
-                    <td>{customer.phone}</td>
-                    <td><Badge tone="info">{fmtNumber(customer.monthly?.visits || 0)}</Badge></td>
-                    <td>{fmtPrice(customer.monthly?.paid || 0)}</td>
-                    <td>{fmtNumber(customer.totalVisits)}</td>
-                    <td>{fmtPrice(customer.totalPaid)}</td>
-                    <td><Badge tone="success">{fmtNumber(customer.points)}</Badge></td>
-                    <td>{customer.lastVisitAt ? fmtDate(customer.lastVisitAt) : "-"}</td>
-                    <td>
-                      <div className="row wrap" style={{ gap: 6 }}>
-                        {!isAdminManaging && (
-                          <Button size="sm" variant="secondary" onClick={() => openDetails(customer)}>{t("cust.customerDetails")}</Button>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => openReviews(customer)}>{t("cust.viewReviews")}</Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="customers-card-grid">
+            {customers.map((customer) => {
+              const balance = Number(customer.balance || 0);
+              const balanceTone = balance > 0 ? " is-credit" : balance < 0 ? " is-debt" : "";
+              return (
+              <article className={`customer-record-card${balanceTone}`} key={customer.id}>
+                <header className="customer-record-head">
+                  <div>
+                    <strong>{customer.name}</strong>
+                    {customer.email && <span>{customer.email}</span>}
+                  </div>
+                  <a href={`tel:${customer.phone}`} className="customer-phone">{customer.phone}</a>
+                  <Badge tone={balance > 0 ? "success" : balance < 0 ? "danger" : "muted"}>
+                    {t("cust.balance")}: {fmtPrice(balance)}
+                  </Badge>
+                </header>
+
+                <div className="customer-record-metrics">
+                  <div>
+                    <span>{t("cust.monthVisits")}</span>
+                    <strong>{fmtNumber(customer.monthly?.visits || 0)}</strong>
+                  </div>
+                  <div>
+                    <span>{t("cust.monthPaid")}</span>
+                    <strong>{fmtPrice(customer.monthly?.paid || 0)}</strong>
+                  </div>
+                  <div>
+                    <span>{t("cust.points")}</span>
+                    <strong>{fmtNumber(customer.points)}</strong>
+                  </div>
+                  <div>
+                    <span>{t("cust.allVisits")}</span>
+                    <strong>{fmtNumber(customer.totalVisits)}</strong>
+                  </div>
+                  <div>
+                    <span>{t("cust.allPaid")}</span>
+                    <strong>{fmtPrice(customer.totalPaid)}</strong>
+                  </div>
+                  <div>
+                    <span>{t("cust.lastVisit")}</span>
+                    <strong>{customer.lastVisitAt ? fmtDate(customer.lastVisitAt) : "-"}</strong>
+                  </div>
+                </div>
+
+                <footer className="customer-record-actions">
+                  {!isAdminManaging && (
+                    <>
+                      <Button size="sm" variant="secondary" onClick={() => openDetails(customer)}>{t("cust.customerDetails")}</Button>
+                      <Button size="sm" onClick={() => openEdit(customer)}>{t("customerEdit.action")}</Button>
+                      <Button size="sm" variant="secondary" onClick={() => openBalance(customer)}>{t("cust.manageBalance")}</Button>
+                    </>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => openReviews(customer)}>{t("cust.viewReviews")}</Button>
+                </footer>
+              </article>
+              );
+            })}
           </div>
         ) : (
           <EmptyState title={t("cust.noCustomers")} hint={t("cust.noCustomersHint")} />
         )}
-      </div>
+      </section>
+
+      <Modal
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        title={t("customerEdit.title")}
+        footer={(
+          <>
+            <Button variant="ghost" onClick={() => setEditTarget(null)}>{t("cancel")}</Button>
+            <Button type="submit" form="customer-edit-form" loading={editSaving}>{t("save")}</Button>
+          </>
+        )}
+      >
+        <form id="customer-edit-form" className="customer-edit-form" onSubmit={saveCustomer}>
+          <Field label={t("customerEdit.name")}>
+            <Input
+              required
+              maxLength="120"
+              value={editForm.name}
+              onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+            />
+          </Field>
+          <Field label={t("customerEdit.phone")}>
+            <Input
+              required
+              inputMode="numeric"
+              pattern="05[0-9]{8}"
+              maxLength="10"
+              value={editForm.phone}
+              onChange={(event) => setEditForm((current) => ({ ...current, phone: event.target.value.replace(/\D/g, "").slice(0, 10) }))}
+            />
+          </Field>
+          <Field label={t("customerEdit.email")}>
+            <Input
+              type="email"
+              maxLength="190"
+              value={editForm.email}
+              onChange={(event) => setEditForm((current) => ({ ...current, email: event.target.value }))}
+            />
+          </Field>
+          <Field label={t("customerEdit.dateOfBirth")}>
+            <Input
+              type="date"
+              max={new Date().toISOString().slice(0, 10)}
+              value={editForm.dateOfBirth}
+              onChange={(event) => setEditForm((current) => ({ ...current, dateOfBirth: event.target.value }))}
+            />
+          </Field>
+        </form>
+      </Modal>
+
+      <Modal
+        open={!!balanceTarget}
+        onClose={() => setBalanceTarget(null)}
+        title={balanceTarget ? t("cust.balanceFor", { name: balanceTarget.name }) : t("cust.manageBalance")}
+        footer={(
+          <>
+            <Button variant="ghost" onClick={() => setBalanceTarget(null)}>{t("cancel")}</Button>
+            <Button type="submit" form="customer-balance-form" loading={balanceSaving}>{t("cust.addBalance")}</Button>
+          </>
+        )}
+      >
+        <form id="customer-balance-form" className="customer-balance-form" onSubmit={saveBalance}>
+          <div className="customer-balance-summary">
+            <div className="customer-balance-current">
+              <span>{t("cust.currentBalance")}</span>
+              <strong>{fmtPrice(balanceTarget?.balance || 0)}</strong>
+            </div>
+            <div className="customer-balance-current is-result">
+              <span>{t("cust.balanceAfterAddition")}</span>
+              <strong>{fmtPrice(Number(balanceTarget?.balance || 0) + Math.max(0, Number(balanceValue) || 0))}</strong>
+            </div>
+          </div>
+          <Field label={t("cust.amountToAdd")}>
+            <Input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max="1000000"
+              required
+              value={balanceValue}
+              onChange={(event) => setBalanceValue(event.target.value)}
+            />
+          </Field>
+          <p className="soft customer-balance-help">{t("cust.balanceHelp")}</p>
+        </form>
+      </Modal>
 
       <Modal
         open={!!reviewsTarget}

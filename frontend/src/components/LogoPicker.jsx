@@ -64,20 +64,21 @@ export function LogoPicker({
   removeText,
   previewAlt,
   imageOptions,
+  compact = false,
 }) {
   const choose = chooseText ?? i18n.t("lp.chooseLogo");
   const change = changeText ?? i18n.t("lp.changeLogo");
   const remove = removeText ?? i18n.t("lp.removeLogo");
   const alt = previewAlt ?? i18n.t("lp.logoAlt");
   return (
-    <div className="logo-picker">
+    <div className={`logo-picker${compact ? " is-compact" : ""}`}>
       <label className="logo-picker-drop">
         <input
           type="file"
           accept="image/*"
           onChange={(event) => readLogoFile(event.target.files?.[0], onChange, onError, imageOptions)}
         />
-        <span className="logo-picker-icon">▣</span>
+        <span className="logo-picker-icon" aria-hidden="true">+</span>
         <span className="logo-picker-text">{value ? change : choose}</span>
         <span className="logo-picker-hint">{i18n.t("lp.pngOrJpg")}</span>
       </label>

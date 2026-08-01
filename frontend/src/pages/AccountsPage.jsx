@@ -3,10 +3,20 @@ import { useBusinessManage } from "../context/BusinessManageContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../components/Toast.jsx";
+import { Modal } from "../components/Modal.jsx";
 import { Badge, Button, EmptyState, Spinner, fmtDate, fmtPrice, fmtTime, PAYMENT_STATUS_META } from "../components/ui.jsx";
 
 function amountOf(appointment) {
   return Number(appointment.paymentAmount ?? appointment.service?.price ?? 0);
+}
+
+function todayInput() {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function isPaid(appointment) {
@@ -18,7 +28,7 @@ function needsRefund(appointment) {
 }
 
 function paymentLabel(appointment, c) {
-  if (appointment.status === "CANCELLED") return "-";
+  if (appointment.status === "CANCELLED") return c.noPayment;
   if (appointment.paymentMethod === "ONLINE" && appointment.paymentStatus === "PAID") {
     return c.paidOnlineNoShow;
   }
@@ -36,11 +46,14 @@ export default function AccountsPage() {
   const toast = useToast();
   const c = new Proxy({}, { get: (_, key) => t("acct." + key) });
   const [appointments, setAppointments] = useState(null);
+  const [invoiceTarget, setInvoiceTarget] = useState(null);
   const [invoice, setInvoice] = useState(null);
   const [paymentFilter, setPaymentFilter] = useState("unpaid");
+  const onlinePaymentEnabled = activeBusiness?.onlinePaymentEnabled === true;
 
   const load = useCallback(() => {
-    api.listAppointments()
+    const today = todayInput();
+    api.listAppointments({ from: today, to: today })
       .then((res) => setAppointments(res.appointments || []))
       .catch((err) => {
         toast.error(err.message);
@@ -53,6 +66,10 @@ export default function AccountsPage() {
     const timer = setInterval(load, 5000);
     return () => clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    if (!onlinePaymentEnabled && paymentFilter === "refund") setPaymentFilter("unpaid");
+  }, [onlinePaymentEnabled, paymentFilter]);
 
   const rows = useMemo(() => (appointments || []).filter((item) => amountOf(item) >= 0), [appointments]);
   const filteredRows = rows.filter((item) => {
@@ -75,13 +92,24 @@ export default function AccountsPage() {
     .filter(needsRefund)
     .reduce((sum, item) => sum + amountOf(item), 0);
 
-  const printInvoice = (appointment) => {
+  const openInvoiceFormats = (appointment) => {
     if (!isPaid(appointment) || appointment.status === "CANCELLED") {
       toast.error(c.cantPrintUnpaid);
       return;
     }
-    setInvoice(appointment);
-    requestAnimationFrame(() => setTimeout(() => window.print(), 50));
+    setInvoiceTarget(appointment);
+  };
+
+  const printInvoice = (format) => {
+    if (!invoiceTarget) return;
+    setInvoice({ appointment: invoiceTarget, format });
+    setInvoiceTarget(null);
+    const clearInvoice = () => {
+      setInvoice(null);
+      window.removeEventListener("afterprint", clearInvoice);
+    };
+    window.addEventListener("afterprint", clearInvoice);
+    requestAnimationFrame(() => setTimeout(() => window.print(), 60));
   };
 
   if (!appointments) return <Spinner page />;
@@ -114,12 +142,12 @@ export default function AccountsPage() {
         </div>
       </div>
 
-      <div className="card mt-3">
-        <div className="row wrap" style={{ gap: 8, padding: 16, borderBottom: "1px solid var(--border)" }}>
+      <section className="accounts-transactions-section mt-3">
+        <div className="accounts-filter-grid">
           {[
             ["unpaid", c.filterUnpaid],
             ["paid", c.filterPaid],
-            ["refund", c.filterRefund],
+            ...(onlinePaymentEnabled ? [["refund", c.filterRefund]] : []),
             ["all", c.filterAll],
           ].map(([key, label]) => (
             <button
@@ -133,79 +161,111 @@ export default function AccountsPage() {
           ))}
         </div>
         {filteredRows.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>{c.customer}</th>
-                  <th>{c.phone}</th>
-                  <th>{c.service}</th>
-                  <th>{c.appointment}</th>
-                  <th>{c.paidAmount}</th>
-                  <th>{c.paymentStatus}</th>
-                  <th>{c.printInvoice}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((appointment) => {
-                  const amount = amountOf(appointment);
-                  const paid = isPaid(appointment);
-                  const rejected = appointment.status === "CANCELLED";
-                  return (
-                    <tr key={appointment.id}>
-                      <td style={{ fontWeight: 800 }}>{appointment.customerName}</td>
-                      <td>{appointment.customerPhone}</td>
-                      <td>{appointment.service?.name}</td>
-                      <td>{fmtDate(appointment.startAt)} <span className="soft">{fmtTime(appointment.startAt)}</span></td>
-                      <td>{amount === 0 ? c.free : fmtPrice(amount)}</td>
-                      <td>{rejected ? <span className="soft">-</span> : <Badge tone={paid ? "success" : "warning"}>{paymentLabel(appointment, c)}</Badge>}</td>
-                      <td>
-                        {rejected || !paid ? (
-                          <span className="soft">-</span>
-                        ) : (
-                          <Button size="sm" variant="ghost" onClick={() => printInvoice(appointment)}>{c.printInvoice}</Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="accounts-transaction-grid">
+            {filteredRows.map((appointment) => {
+              const amount = amountOf(appointment);
+              const paid = isPaid(appointment);
+              const rejected = appointment.status === "CANCELLED";
+              return (
+                <article className="accounts-transaction-card" key={appointment.id}>
+                  <header className="accounts-transaction-head">
+                    <div>
+                      <strong>{appointment.customerName}</strong>
+                      <a href={`tel:${appointment.customerPhone}`}>{appointment.customerPhone}</a>
+                    </div>
+                    <Badge tone={rejected ? "muted" : paid ? "success" : "warning"}>{paymentLabel(appointment, c)}</Badge>
+                  </header>
+
+                  <div className="accounts-transaction-details">
+                    <div>
+                      <span>{c.service}</span>
+                      <strong>{appointment.service?.name || "-"}</strong>
+                    </div>
+                    <div>
+                      <span>{c.appointment}</span>
+                      <strong>{fmtDate(appointment.startAt)}</strong>
+                      <small>{fmtTime(appointment.startAt)}</small>
+                    </div>
+                    <div>
+                      <span>{c.paidAmount}</span>
+                      <strong>{amount === 0 ? c.free : fmtPrice(amount)}</strong>
+                    </div>
+                  </div>
+
+                  <footer className="accounts-transaction-actions">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={rejected || !paid}
+                      onClick={() => openInvoiceFormats(appointment)}
+                    >
+                      {c.printInvoice}
+                    </Button>
+                  </footer>
+                </article>
+              );
+            })}
           </div>
         ) : (
           <EmptyState title={c.noRows} hint={c.noRowsHint} />
         )}
-      </div>
+      </section>
 
       {invoice && (
-        <div className="invoice-print-page" dir="rtl">
-          <div className="invoice-box">
-            <div className="invoice-head">
-              <div>
-                <h1>{c.invoice}</h1>
-                <p>{activeBusiness?.name || invoice.business?.name}</p>
+        <>
+          <style>{`@media print { @page { size: ${invoice.format === "thermal" ? "80mm auto" : "A4"}; margin: ${invoice.format === "thermal" ? "4mm" : "14mm"}; } }`}</style>
+          <div className={`invoice-print-page invoice-print-page--${invoice.format}`} dir="rtl">
+            <div className="invoice-box">
+              <div className="invoice-head">
+                <div>
+                  <h1>{c.invoice}</h1>
+                  <p>{activeBusiness?.name || t("store")}</p>
+                </div>
+                <img src={activeBusiness?.logoUrl || "/oh-tech-logo.jpg"} alt={activeBusiness?.name || "O&H Tech"} />
               </div>
-              {activeBusiness?.logoUrl && <img src={activeBusiness.logoUrl} alt={activeBusiness.name} />}
-            </div>
-            <div className="invoice-meta">
-              <span>{c.invoiceNo}: #{invoice.id}</span>
-              <span>{c.date}: {fmtDate(new Date())}</span>
-            </div>
-            <div className="invoice-lines">
-              <div><span>{c.customer}</span><strong>{invoice.customerName}</strong></div>
-              <div><span>{c.phone}</span><strong>{invoice.customerPhone}</strong></div>
-              <div><span>{c.service}</span><strong>{invoice.service?.name}</strong></div>
-              <div><span>{c.employee}</span><strong>{invoice.employee?.name}</strong></div>
-              <div><span>{c.appointment}</span><strong>{fmtDate(invoice.startAt)} {fmtTime(invoice.startAt)}</strong></div>
-              <div><span>{c.paymentStatus}</span><strong>{paymentLabel(invoice, c)}</strong></div>
-            </div>
-            <div className="invoice-total">
-              <span>{c.total}</span>
-              <strong>{amountOf(invoice) === 0 ? c.free : fmtPrice(amountOf(invoice))}</strong>
+              <div className="invoice-meta">
+                <span>{c.invoiceNo}: #{invoice.appointment.id}</span>
+                <span>{c.date}: {fmtDate(new Date())}</span>
+              </div>
+              <div className="invoice-section-title">{t("invoiceCustomerDetails")}</div>
+              <div className="invoice-lines">
+                <div><span>{c.customer}</span><strong>{invoice.appointment.customerName}</strong></div>
+                <div><span>{c.phone}</span><strong dir="ltr">{invoice.appointment.customerPhone}</strong></div>
+              </div>
+              <div className="invoice-section-title">{t("invoiceBookingDetails")}</div>
+              <div className="invoice-lines">
+                <div><span>{c.service}</span><strong>{invoice.appointment.service?.name || "-"}</strong></div>
+                <div><span>{c.employee}</span><strong>{invoice.appointment.employee?.name || "-"}</strong></div>
+                <div><span>{c.appointment}</span><strong>{fmtDate(invoice.appointment.startAt)} {fmtTime(invoice.appointment.startAt)} - {fmtTime(invoice.appointment.endAt)}</strong></div>
+              </div>
+              <div className="invoice-totals">
+                <div><span>{t("invoiceBeforeTax")}</span><strong>{fmtPrice(amountOf(invoice.appointment) * 0.82)}</strong></div>
+                <div><span>{t("invoiceTax18")}</span><strong>{fmtPrice(amountOf(invoice.appointment) * 0.18)}</strong></div>
+                <div className="invoice-total"><span>{t("invoiceFinalPrice")}</span><strong>{fmtPrice(amountOf(invoice.appointment))}</strong></div>
+              </div>
+              <p className="invoice-tax-note">{t("invoiceTaxIncludedNote")}</p>
+              <p className="invoice-thanks">{t("invoiceSeeYouAgain")}</p>
             </div>
           </div>
-        </div>
+        </>
       )}
+
+      <Modal
+        open={!!invoiceTarget}
+        onClose={() => setInvoiceTarget(null)}
+        title={t("invoiceChooseFormat")}
+      >
+        <div className="invoice-format-options">
+          <button type="button" onClick={() => printInvoice("a4")}>
+            <strong>{t("invoiceA4")}</strong>
+            <span>{t("invoiceA4Hint")}</span>
+          </button>
+          <button type="button" onClick={() => printInvoice("thermal")}>
+            <strong>{t("invoiceThermal80")}</strong>
+            <span>{t("invoiceThermalHint")}</span>
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

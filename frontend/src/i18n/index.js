@@ -10,6 +10,7 @@ import ar from "./resources/ar.js";
 import en from "./resources/en.js";
 import he from "./resources/he.js";
 import extra from "./resources/extra.js";
+import features from "./resources/features.js";
 
 // Persisted-preference key. Kept identical to the app's previous key so users
 // who already selected a language keep their choice (no migration needed).
@@ -38,9 +39,9 @@ i18next
       // Base resources (auto-generated from the original dictionary) merged with
       // per-page string extractions kept in extra.js. Both are flat/nested keys
       // in the single "translation" namespace.
-      ar: { translation: { ...ar, ...extra.ar } },
-      en: { translation: { ...en, ...extra.en } },
-      he: { translation: { ...he, ...extra.he } },
+      ar: { translation: { ...ar, ...extra.ar, ...features.ar } },
+      en: { translation: { ...en, ...extra.en, ...features.en } },
+      he: { translation: { ...he, ...extra.he, ...features.he } },
     },
     fallbackLng: DEFAULT_LANGUAGE,
     supportedLngs: SUPPORTED_LANGUAGES,

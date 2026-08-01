@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useBusinessManage } from "../context/BusinessManageContext.jsx";
 import { useToast } from "../components/Toast.jsx";
 import {
-  Badge,
   Button,
   EmptyState,
+  Field,
   Input,
   Select,
   Spinner,
@@ -13,12 +13,17 @@ import {
   fmtTime,
   PAYMENT_METHOD_META,
   PAYMENT_STATUS_META,
-  STATUS_META,
 } from "../components/ui.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { Modal } from "../components/Modal.jsx";
 
 function todayRange() {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
   return { from: today, to: today };
 }
 
@@ -32,13 +37,15 @@ export default function AppointmentPaymentsPage() {
   const { t } = useLanguage();
   const [appointments, setAppointments] = useState(null);
   const [employees, setEmployees] = useState([]);
-  const [filters, setFilters] = useState({ ...todayRange(), employeeId: "", paymentStatus: "" });
+  const [filters, setFilters] = useState({ employeeId: "", paymentStatus: "" });
   const [savingId, setSavingId] = useState(null);
+  const [paymentTarget, setPaymentTarget] = useState(null);
+  const [receivedAmount, setReceivedAmount] = useState("");
+  const [balanceUsedAmount, setBalanceUsedAmount] = useState("0");
+  const [useCustomerBalance, setUseCustomerBalance] = useState(false);
 
   const load = useCallback((silent = false) => {
-    const params = {};
-    if (filters.from) params.from = filters.from;
-    if (filters.to) params.to = filters.to;
+    const params = { ...todayRange() };
     if (filters.employeeId) params.employeeId = filters.employeeId;
     if (filters.paymentStatus) params.paymentStatus = filters.paymentStatus;
     if (!silent) setAppointments(null);
@@ -58,11 +65,41 @@ export default function AppointmentPaymentsPage() {
     return () => clearInterval(timer);
   }, [load]);
 
-  const changePayment = async (appointment, nextStatus) => {
+  const openPayment = (appointment) => {
+    const due = paymentAmount(appointment);
+    setPaymentTarget(appointment);
+    setReceivedAmount(String(due));
+    setBalanceUsedAmount("0");
+    setUseCustomerBalance(false);
+  };
+
+  const changePayment = async (event) => {
+    event.preventDefault();
+    if (!paymentTarget) return;
+    const cashReceived = Number(receivedAmount || 0);
+    const balanceUsed = Number(balanceUsedAmount);
+    const availableBalance = Math.max(0, Number(paymentTarget.customerBalance || 0));
+    const due = paymentAmount(paymentTarget);
+    const maximumBalanceUse = Math.min(availableBalance, due);
+    if (!Number.isFinite(cashReceived) || cashReceived < 0) {
+      toast.error(t("appPay.invalidReceivedAmount"));
+      return;
+    }
+    if (!Number.isFinite(balanceUsed) || balanceUsed < 0 || balanceUsed > maximumBalanceUse) {
+      toast.error(t("appPay.invalidBalanceUsed"));
+      return;
+    }
+    if (useCustomerBalance && balanceUsed >= due && cashReceived !== 0) {
+      toast.error(t("appPay.invalidReceivedAmount"));
+      return;
+    }
+    const totalCovered = cashReceived + balanceUsed;
+    const appointment = paymentTarget;
     setSavingId(appointment.id);
     try {
-      await api.updateAppointmentPayment(appointment.id, nextStatus);
+      await api.updateAppointmentPayment(appointment.id, "PAID", totalCovered, balanceUsed);
       toast.success(t("appPay.paymentUpdated"));
+      setPaymentTarget(null);
       load();
     } catch (err) {
       toast.error(err.message);
@@ -71,101 +108,184 @@ export default function AppointmentPaymentsPage() {
     }
   };
 
-  const rows = (appointments || []).filter((appointment) => !["CANCELLED", "NO_SHOW"].includes(appointment.status));
+  const changeUseCustomerBalance = (event) => {
+    if (!paymentTarget) return;
+    const enabled = event.target.checked;
+    const due = paymentAmount(paymentTarget);
+    const availableBalance = Math.max(0, Number(paymentTarget.customerBalance || 0));
+    const automaticBalanceUse = enabled ? Math.min(availableBalance, due) : 0;
+    setUseCustomerBalance(enabled);
+    setBalanceUsedAmount(String(automaticBalanceUse));
+    if (!enabled) {
+      setReceivedAmount(String(due));
+      return;
+    }
+    const remaining = Math.max(0, due - automaticBalanceUse);
+    setReceivedAmount(String(remaining));
+  };
+
+  const changeReceivedAmount = (event) => {
+    const value = event.target.value;
+    if (value === "") {
+      setReceivedAmount("");
+      return;
+    }
+    const requested = Number(value);
+    if (!Number.isFinite(requested)) {
+      setReceivedAmount("0");
+      return;
+    }
+    setReceivedAmount(String(Math.max(0, Math.min(1_000_000, requested))));
+  };
+
+  const rows = (appointments || []).filter((appointment) => ["CONFIRMED", "COMPLETED"].includes(appointment.status));
 
   return (
     <div>
       <div className="page-head">
         <div>
           <div className="page-title">{t("navAppointmentPayments")}</div>
-          <div className="page-sub">{t("appPay.sub")}</div>
         </div>
       </div>
 
       <div className="card card-pad" style={{ marginBottom: 18 }}>
-        <div className="row wrap appointments-filters payment-filters" style={{ gap: 10 }}>
-          <div className="payment-date-inputs">
-            <Input type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} />
-            <Input type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} />
-          </div>
-          <div className="appointments-filter-select" style={{ minWidth: 180 }}>
+        <div className="payment-page-filters">
+          <div className="appointments-filter-select">
             <Select value={filters.employeeId} onChange={(event) => setFilters((current) => ({ ...current, employeeId: event.target.value }))}>
               <option value="">{t("sd.allStaff")}</option>
               {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
             </Select>
           </div>
-          <div className="appointments-filter-select" style={{ minWidth: 160 }}>
+          <div className="appointments-filter-select">
             <Select value={filters.paymentStatus} onChange={(event) => setFilters((current) => ({ ...current, paymentStatus: event.target.value }))}>
               <option value="">{t("ap.allPayStatuses")}</option>
               {Object.entries(PAYMENT_STATUS_META).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
             </Select>
           </div>
-          <Button variant="ghost" onClick={() => setFilters({ ...todayRange(), employeeId: "", paymentStatus: "" })}>{t("sd.today")}</Button>
         </div>
       </div>
 
-      <div className="card">
+      <section className="appointment-payments-results">
         {!appointments ? <Spinner page /> : rows.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("customer")}</th>
-                  <th>{t("service")}</th>
-                  <th>{t("employee")}</th>
-                  <th>{t("sd.appointment")}</th>
-                  <th>{t("appPay.bookingStatus")}</th>
-                  <th>{t("sd.amount")}</th>
-                  <th>{t("paymentMethod")}</th>
-                  <th>{t("bc.paymentStatus")}</th>
-                  <th>{t("appPay.payAction")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((appointment) => {
-                  const amount = paymentAmount(appointment);
-                  const isFree = amount === 0;
-                  const isPaid = appointment.paymentStatus === "PAID";
-                  const canChange = !isFree && !isPaid && appointment.paymentMethod === "PAY_AT_STORE";
-                  return (
-                    <tr key={appointment.id}>
-                      <td style={{ fontWeight: 800 }}>
-                        {appointment.customerName}
-                        <div className="soft" style={{ fontSize: 12 }}>{appointment.customerPhone}</div>
-                      </td>
-                      <td>{appointment.service?.name || "-"}</td>
-                      <td>{appointment.employee?.name || "-"}</td>
-                      <td>
-                        {fmtDate(appointment.startAt)}
-                        <div className="soft" style={{ fontSize: 12 }}>{fmtTime(appointment.startAt)} - {fmtTime(appointment.endAt)}</div>
-                      </td>
-                      <td><Badge tone={STATUS_META[appointment.status]?.tone}>{STATUS_META[appointment.status]?.label || appointment.status}</Badge></td>
-                      <td>{isFree ? <Badge tone="success">{t("bc.freeService")}</Badge> : fmtPrice(amount)}</td>
-                      <td>{isFree ? "-" : (PAYMENT_METHOD_META[appointment.paymentMethod]?.label || "-")}</td>
-                      <td><Badge tone={PAYMENT_STATUS_META[appointment.paymentStatus]?.tone}>{isFree ? t("bc.freeService") : PAYMENT_STATUS_META[appointment.paymentStatus]?.label}</Badge></td>
-                      <td>
+          <div className="appointment-payments-grid">
+            {rows.map((appointment) => {
+              const amount = paymentAmount(appointment);
+              const isFree = amount === 0;
+              const isPaid = appointment.paymentStatus === "PAID";
+              const canChange = !isFree && !isPaid && appointment.paymentMethod === "PAY_AT_STORE";
+              return (
+                <article className="appointment-payment-card" key={appointment.id}>
+                  <header className={`appointment-payment-head${isPaid ? " is-settled" : ""}`}>
+                    <div className="appointment-payment-customer">
+                      <div>
+                        <strong>{appointment.customerName}</strong>
+                        <span>{appointment.service?.name || "-"}</span>
+                      </div>
+                      <a href={`tel:${appointment.customerPhone}`}>{appointment.customerPhone}</a>
+                    </div>
+                    {!isPaid && (
+                      <div className="appointment-payment-head-action">
                         {isFree ? (
                           <span className="soft">{t("appPay.noPayment")}</span>
                         ) : canChange ? (
-                          <Button size="sm" loading={savingId === appointment.id} onClick={() => changePayment(appointment, "PAID")}>{t("appPay.receivePayment")}</Button>
-                        ) : isPaid ? (
-                          <Badge tone="success">{t("payStatusPaid")}</Badge>
+                          <Button size="sm" loading={savingId === appointment.id} onClick={() => openPayment(appointment)}>{t("appPay.receivePayment")}</Button>
                         ) : appointment.paymentMethod === "ONLINE" ? (
                           <span className="soft">{t("appPay.viaGateway")}</span>
                         ) : (
                           <span className="soft">{t("appPay.notEditable")}</span>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </div>
+                    )}
+                  </header>
+
+                  <div className="appointment-payment-details">
+                    <div>
+                      <span>{t("employee")}</span>
+                      <strong>{appointment.employee?.name || "-"}</strong>
+                    </div>
+                    <div>
+                      <span>{t("sd.appointment")}</span>
+                      <strong>{fmtDate(appointment.startAt)}</strong>
+                      <small>{fmtTime(appointment.startAt)} - {fmtTime(appointment.endAt)}</small>
+                    </div>
+                    <div>
+                      <span>{t("sd.amount")}</span>
+                      <strong>{isFree ? t("bc.freeService") : fmtPrice(amount)}</strong>
+                      <small>{isFree ? "-" : (PAYMENT_METHOD_META[appointment.paymentMethod]?.label || "-")}</small>
+                    </div>
+                  </div>
+
+                </article>
+              );
+            })}
           </div>
         ) : (
           <EmptyState title={t("appPay.noBookings")} hint={t("appPay.noBookingsHint")} />
         )}
-      </div>
+      </section>
+
+      <Modal
+        open={!!paymentTarget}
+        onClose={() => !savingId && setPaymentTarget(null)}
+        title={t("appPay.receivePayment")}
+        footer={(
+          <>
+            <Button variant="ghost" onClick={() => setPaymentTarget(null)} disabled={!!savingId}>{t("cancel")}</Button>
+            <Button type="submit" form="receive-payment-form" loading={!!savingId}>{t("appPay.confirmPayment")}</Button>
+          </>
+        )}
+      >
+        {paymentTarget && (
+          <form id="receive-payment-form" className="receive-payment-form" onSubmit={changePayment}>
+            {(() => {
+              const due = paymentAmount(paymentTarget);
+              const availableBalance = Math.max(0, Number(paymentTarget.customerBalance || 0));
+              const balanceUsed = Number(balanceUsedAmount || 0);
+              const cashReceived = Math.max(0, Number(receivedAmount || 0));
+              const balanceCoversDue = useCustomerBalance && balanceUsed >= due;
+              const balanceAfterPayment = availableBalance + cashReceived - due;
+              return (
+                <>
+            <div className="receive-payment-summary">
+              <div><span>{t("appPay.dueAmount")}</span><strong>{fmtPrice(due)}</strong></div>
+              <div><span>{t("appPay.currentBalance")}</span><strong>{fmtPrice(paymentTarget.customerBalance || 0)}</strong></div>
+            </div>
+            <label className={`receive-payment-balance-toggle${useCustomerBalance ? " is-active" : ""}${availableBalance <= 0 ? " is-disabled" : ""}`}>
+              <input
+                type="checkbox"
+                checked={useCustomerBalance}
+                disabled={availableBalance <= 0}
+                onChange={changeUseCustomerBalance}
+              />
+              <span>{t("appPay.balanceUsedAmount")}</span>
+              <strong>{fmtPrice(balanceUsed)}</strong>
+            </label>
+            <Field label={t("appPay.cashReceivedAmount")}>
+              <Input
+                type="number"
+                min="0"
+                max="1000000"
+                step="0.01"
+                autoFocus={!balanceCoversDue}
+                disabled={balanceCoversDue}
+                value={receivedAmount}
+                onChange={changeReceivedAmount}
+              />
+            </Field>
+            <div className="receive-payment-breakdown">
+              <span>{t("appPay.cashReceivedAmount")}</span>
+              <strong>{fmtPrice(cashReceived)}</strong>
+            </div>
+            <div className={`receive-payment-result ${balanceAfterPayment < 0 ? "is-debt" : "is-credit"}`}>
+              <span>{t("appPay.balanceAfterPayment")}</span>
+              <strong>{fmtPrice(balanceAfterPayment)}</strong>
+            </div>
+                </>
+              );
+            })()}
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -91,8 +91,9 @@ export default function App() {
             <Route path="customers" element={<CustomersPage />} />
             <Route path="appointments" element={<AppointmentsPage />} />
             <Route path="appointments/payments" element={<AppointmentPaymentsPage />} />
-            <Route path="appointments/manage" element={<BookingManagementPage />} />
-            <Route path="appointments/rejected" element={<AppointmentsPage mode="rejected" />} />
+            <Route path="appointments/late" element={<BookingManagementPage lateOnly />} />
+            <Route path="appointments/manage" element={<Navigate to="../late" relative="path" replace />} />
+            <Route path="appointments/rejected" element={<Navigate to="../archive" relative="path" replace />} />
             <Route path="appointments/archive" element={<AppointmentsPage mode="archive" />} />
             <Route path="services" element={<ServicesManagement />} />
             <Route path="employees" element={<EmployeesManagement />} />
@@ -119,8 +120,9 @@ export default function App() {
           <Route path="/dashboard/customers" element={<CustomersPage />} />
           <Route path="/dashboard/appointments" element={<AppointmentsPage />} />
           <Route path="/dashboard/appointments/payments" element={<Navigate to="/dashboard/accounts/payments" replace />} />
-          <Route path="/dashboard/appointments/manage" element={<BookingManagementPage />} />
-          <Route path="/dashboard/appointments/rejected" element={<AppointmentsPage mode="rejected" />} />
+          <Route path="/dashboard/appointments/late" element={<BookingManagementPage lateOnly />} />
+          <Route path="/dashboard/appointments/manage" element={<Navigate to="/dashboard/appointments/late" replace />} />
+          <Route path="/dashboard/appointments/rejected" element={<Navigate to="/dashboard/appointments/archive" replace />} />
           <Route path="/dashboard/appointments/archive" element={<AppointmentsPage mode="archive" />} />
           <Route path="/dashboard/services" element={<ServicesManagement />} />
           <Route path="/dashboard/employees" element={<EmployeesManagement />} />

@@ -7,7 +7,7 @@ import { Button, Field, Input, Select, Spinner, EmptyState, fmtDate, fmtTime } f
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const DAYS = Array.from({ length: 7 });
-const DEFAULT_BLOCK_FORM = { employeeId: "", startDate: "", endDate: "", start: "00:00", end: "23:59", reason: "" };
+const DEFAULT_BLOCK_FORM = { employeeId: "", startDate: "", endDate: "", start: "00:00", end: "23:59", fullDay: false, reason: "" };
 
 // يبني جدول 7 أيام افتراضي مدموجًا مع المحفوظ
 function buildWeek(saved) {
@@ -20,9 +20,10 @@ function buildWeek(saved) {
           endTime: found.endTime,
           breakStartTime: found.breakStartTime || "",
           breakEndTime: found.breakEndTime || "",
+          breakEnabled: Boolean(found.breakStartTime || found.breakEndTime),
           isClosed: found.isClosed,
         }
-      : { dayOfWeek: dow, startTime: "09:00", endTime: "17:00", breakStartTime: "", breakEndTime: "", isClosed: dow === 5 };
+      : { dayOfWeek: dow, startTime: "09:00", endTime: "17:00", breakStartTime: "", breakEndTime: "", breakEnabled: false, isClosed: dow === 5 };
   });
 }
 
@@ -63,7 +64,11 @@ export default function WorkingHoursSettings() {
   const saveWeek = async () => {
     setSaving(true);
     try {
-      await api.setWorkingHours(week);
+      await api.setWorkingHours(week.map(({ breakEnabled, ...day }) => ({
+        ...day,
+        breakStartTime: breakEnabled ? day.breakStartTime : "",
+        breakEndTime: breakEnabled ? day.breakEndTime : "",
+      })));
       toast.success(t("wh.saved"));
     } catch (err) {
       toast.error(err.message);
@@ -74,13 +79,13 @@ export default function WorkingHoursSettings() {
 
   const addBlock = async (e) => {
     e.preventDefault();
-    const { startDate, endDate, start, end } = blockForm;
+    const { startDate, endDate, start, end, fullDay } = blockForm;
     const finalEndDate = endDate || startDate;
     if (!startDate) return toast.error(t("wh.pickStart"));
     if (!finalEndDate) return toast.error(t("wh.pickEnd"));
 
-    const startAt = `${startDate}T${start}:00`;
-    const endAt = `${finalEndDate}T${end}:00`;
+    const startAt = `${startDate}T${fullDay ? "00:00" : start}:00`;
+    const endAt = `${finalEndDate}T${fullDay ? "23:59" : end}:00`;
     if (new Date(endAt) <= new Date(startAt)) return toast.error(t("wh.endAfterStart"));
 
     try {
@@ -120,66 +125,102 @@ export default function WorkingHoursSettings() {
           <div className="page-title">{t("navWorkingHours")}</div>
           <div className="page-sub">{t("wh.sub")}</div>
         </div>
+        <Button onClick={saveWeek} loading={saving}>{t("wh.saveChanges")}</Button>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <h3 className="card-title">🕐 {t("wh.weekly")}</h3>
-          <Button onClick={saveWeek} loading={saving}>{t("wh.saveChanges")}</Button>
-        </div>
-        <div className="card-pad col" style={{ gap: 10 }}>
+      <section className="working-hours-section">
+        <div className="working-hours-week">
           {week.map((d) => (
-            <div key={d.dayOfWeek} className="row" style={{ gap: 14, padding: "8px 0", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
-              <div style={{ width: 90, fontWeight: 700 }}>{dayNames[d.dayOfWeek]}</div>
-              <label className="row" style={{ gap: 6, cursor: "pointer", width: 120 }}>
-                <input type="checkbox" checked={!d.isClosed} onChange={(e) => updateDay(d.dayOfWeek, { isClosed: !e.target.checked })} />
-                <span className={d.isClosed ? "soft" : ""}>{d.isClosed ? t("svc.closed") : t("wh.open")}</span>
-              </label>
-              <div className="row" style={{ gap: 8, opacity: d.isClosed ? 0.4 : 1, pointerEvents: d.isClosed ? "none" : "auto" }}>
-                <input className="input" type="time" style={{ width: 130 }} value={d.startTime} onChange={(e) => updateDay(d.dayOfWeek, { startTime: e.target.value })} />
-                <span className="soft">{t("svc.to")}</span>
-                <input className="input" type="time" style={{ width: 130 }} value={d.endTime} onChange={(e) => updateDay(d.dayOfWeek, { endTime: e.target.value })} />
-              </div>
-              <div className="row" style={{ gap: 8, opacity: d.isClosed ? 0.4 : 1, pointerEvents: d.isClosed ? "none" : "auto" }}>
-                <span className="soft">{t("wh.break")}</span>
-                <input className="input" type="time" style={{ width: 120 }} value={d.breakStartTime || ""} onChange={(e) => updateDay(d.dayOfWeek, { breakStartTime: e.target.value })} />
-                <span className="soft">{t("svc.to")}</span>
-                <input className="input" type="time" style={{ width: 120 }} value={d.breakEndTime || ""} onChange={(e) => updateDay(d.dayOfWeek, { breakEndTime: e.target.value })} />
-                {(d.breakStartTime || d.breakEndTime) && (
-                  <Button size="sm" variant="ghost" onClick={() => updateDay(d.dayOfWeek, { breakStartTime: "", breakEndTime: "" })}>{t("wh.clear")}</Button>
-                )}
-              </div>
-            </div>
+            <article key={d.dayOfWeek} className={`working-hours-day${d.isClosed ? " is-closed" : ""}`}>
+              <header className="working-hours-day-head">
+                <strong>{dayNames[d.dayOfWeek]}</strong>
+                <div className="working-hours-day-controls">
+                  {!d.isClosed && (
+                    <label className="working-day-toggle working-break-toggle">
+                      <input
+                        type="checkbox"
+                        checked={d.breakEnabled}
+                        onChange={(e) => updateDay(d.dayOfWeek, {
+                          breakEnabled: e.target.checked,
+                          ...(!e.target.checked ? { breakStartTime: "", breakEndTime: "" } : {}),
+                        })}
+                      />
+                      <span aria-hidden="true" />
+                      <b>{t("wh.break")}</b>
+                    </label>
+                  )}
+                  <label className="working-day-toggle">
+                    <input type="checkbox" checked={!d.isClosed} onChange={(e) => updateDay(d.dayOfWeek, { isClosed: !e.target.checked })} />
+                    <span aria-hidden="true" />
+                    <b>{d.isClosed ? t("svc.closed") : t("wh.open")}</b>
+                  </label>
+                </div>
+              </header>
+
+              {!d.isClosed && (
+                <div className="working-hours-day-body">
+                  <div className="working-hours-time-row">
+                    <span>{t("wh.workPeriod")}</span>
+                    <div>
+                      <input aria-label={`${dayNames[d.dayOfWeek]} ${t("sd.from")}`} className="input" type="time" value={d.startTime} onChange={(e) => updateDay(d.dayOfWeek, { startTime: e.target.value })} />
+                      <small>{t("svc.to")}</small>
+                      <input aria-label={`${dayNames[d.dayOfWeek]} ${t("svc.to")}`} className="input" type="time" value={d.endTime} onChange={(e) => updateDay(d.dayOfWeek, { endTime: e.target.value })} />
+                    </div>
+                  </div>
+
+                  {d.breakEnabled && (
+                    <div className="working-hours-time-row">
+                      <span>
+                        {t("wh.break")}
+                        {(d.breakStartTime || d.breakEndTime) && (
+                          <button type="button" className="working-hours-clear" onClick={() => updateDay(d.dayOfWeek, { breakStartTime: "", breakEndTime: "" })}>
+                            {t("wh.clear")}
+                          </button>
+                        )}
+                      </span>
+                      <div>
+                        <input aria-label={`${dayNames[d.dayOfWeek]} ${t("wh.break")} ${t("sd.from")}`} className="input" type="time" value={d.breakStartTime || ""} onChange={(e) => updateDay(d.dayOfWeek, { breakStartTime: e.target.value })} />
+                        <small>{t("svc.to")}</small>
+                        <input aria-label={`${dayNames[d.dayOfWeek]} ${t("wh.break")} ${t("svc.to")}`} className="input" type="time" value={d.breakEndTime || ""} onChange={(e) => updateDay(d.dayOfWeek, { breakEndTime: e.target.value })} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </article>
           ))}
         </div>
-      </div>
+      </section>
 
-      <div className="card mt-3">
-        <div className="card-header">
-          <h3 className="card-title">🚫 {t("wh.blockedTimes")}</h3>
+      <section className="working-hours-blocked mt-3">
+        <div className="working-hours-toolbar">
+          <h3>{t("wh.blockedTimes")}</h3>
           <Button variant="ghost" onClick={() => setModal(true)}>+ {t("wh.addBlock")}</Button>
         </div>
         {blocked.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>{t("date")}</th><th>{t("wh.period")}</th><th>{t("wh.appliesTo")}</th><th>{t("wh.reason")}</th><th></th></tr></thead>
-              <tbody>
-                {blocked.map((b) => (
-                  <tr key={b.id}>
-                    <td>{formatBlockedDate(b)}</td>
-                    <td>{fmtTime(b.startAt)} - {fmtTime(b.endAt)}</td>
-                    <td>{b.employee?.name || t("wh.wholeBusiness")}</td>
-                    <td className="muted">{b.reason || "—"}</td>
-                    <td><Button size="sm" variant="danger" onClick={() => setConfirmDel(b.id)}>{t("delete")}</Button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="working-hours-blocked-grid">
+            {blocked.map((b) => (
+              <article className="working-hours-blocked-card" key={b.id}>
+                <header>
+                  <strong>{formatBlockedDate(b)}</strong>
+                  <span>{b.employee?.name || t("wh.wholeBusiness")}</span>
+                </header>
+                <div>
+                  <span>{t("wh.period")}</span>
+                  <strong>{fmtTime(b.startAt)} - {fmtTime(b.endAt)}</strong>
+                </div>
+                <div>
+                  <span>{t("wh.reason")}</span>
+                  <strong>{b.reason || "—"}</strong>
+                </div>
+                <Button size="sm" variant="danger" onClick={() => setConfirmDel(b.id)}>{t("delete")}</Button>
+              </article>
+            ))}
           </div>
         ) : (
-          <EmptyState icon="🚫" title={t("wh.noBlocked")} hint={t("wh.noBlockedHint")} />
+          <EmptyState title={t("wh.noBlocked")} hint={t("wh.noBlockedHint")} />
         )}
-      </div>
+      </section>
 
       <Modal
         open={modal}
@@ -203,10 +244,17 @@ export default function WorkingHoursSettings() {
             <Field label={t("wh.startDate")}><Input type="date" value={blockForm.startDate} onChange={(e) => setBlockForm({ ...blockForm, startDate: e.target.value, endDate: blockForm.endDate || e.target.value })} required /></Field>
             <Field label={t("wh.endDate")}><Input type="date" value={blockForm.endDate} min={blockForm.startDate || undefined} onChange={(e) => setBlockForm({ ...blockForm, endDate: e.target.value })} required /></Field>
           </div>
-          <div className="grid grid-2">
-            <Field label={t("sd.from")}><Input type="time" value={blockForm.start} onChange={(e) => setBlockForm({ ...blockForm, start: e.target.value })} /></Field>
-            <Field label={t("svc.to")}><Input type="time" value={blockForm.end} onChange={(e) => setBlockForm({ ...blockForm, end: e.target.value })} /></Field>
-          </div>
+          <label className="working-day-toggle block-full-day-toggle">
+            <input type="checkbox" checked={blockForm.fullDay} onChange={(e) => setBlockForm({ ...blockForm, fullDay: e.target.checked })} />
+            <span aria-hidden="true" />
+            <b>{t("wh.fullDay")}</b>
+          </label>
+          {!blockForm.fullDay && (
+            <div className="grid grid-2">
+              <Field label={t("sd.from")}><Input type="time" value={blockForm.start} onChange={(e) => setBlockForm({ ...blockForm, start: e.target.value })} /></Field>
+              <Field label={t("svc.to")}><Input type="time" value={blockForm.end} onChange={(e) => setBlockForm({ ...blockForm, end: e.target.value })} /></Field>
+            </div>
+          )}
           <Field label={t("wh.reasonOptional")}><Input value={blockForm.reason} onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })} placeholder={t("wh.reasonPlaceholder")} /></Field>
         </form>
       </Modal>

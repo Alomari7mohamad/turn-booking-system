@@ -26,8 +26,7 @@ const NAV = {
       labelKey: "navAppointments",
       children: [
         { to: "/dashboard/appointments", labelKey: "navAppointments", end: true },
-        { to: "/dashboard/appointments/manage", labelKey: "navAppointmentsManagement" },
-        { to: "/dashboard/appointments/rejected", labelKey: "navRejectedAppointments" },
+        { to: "/dashboard/appointments/late", labelKey: "navLateAppointments" },
         { to: "/dashboard/appointments/archive", labelKey: "navArchive" },
       ],
     },
@@ -59,7 +58,7 @@ const ROLE_KEY = {
   STAFF: "roleStaff",
 };
 
-const mojibakePattern = /[ן¢׳´׳³׳’ֲֲֲ׳ ]/;
+const mojibakePattern = /[\uF88D\uFFFD\u0080-\u009F]|(?:\u05F4[§\u00AD])/;
 
 function cleanNotificationMessage(item) {
   const message = item?.message || "";

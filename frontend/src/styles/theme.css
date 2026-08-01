@@ -1,8 +1,8 @@
 ﻿/* =================================================================
-   †״¸״§… ״§„״×״µ…… (Design System) ג€” RTL ״£ˆ„‹״§״ …״³״×ˆ״­‰ …† ״£†״¸…״© SaaS
+   نظام التصميم (Design System) — RTL أولًا، مستوحى من أنظمة SaaS
    ================================================================= */
 :root {
-  /* ״§„״£„ˆ״§† ״§„״£״³״§״³״© */
+  /* الألوان الأساسية */
   --primary: #064e3b;
   --primary-hover: #022c22;
   --primary-soft: #dcfce7;
@@ -18,7 +18,7 @@
   --info: #0ea5e9;
   --info-soft: #e0f2fe;
 
-  /* …״­״§״¯״§״× */
+  /* محايدات */
   --bg: #f5f6fb;
   --surface: #ffffff;
   --surface-2: #fafbff;
@@ -29,7 +29,7 @@
   --text-muted: #64748b;
   --text-soft: #94a3b8;
 
-  /* ״×״£״«״±״§״× */
+  /* تأثيرات */
   --radius: 14px;
   --radius-sm: 10px;
   --radius-lg: 20px;
@@ -173,7 +173,7 @@ canvas {
   max-width: 100%;
 }
 
-/* ===================== ״£״¯ˆ״§״× ״¹״§…״© ===================== */
+/* ===================== أدوات عامة ===================== */
 .muted {
   color: var(--text-muted);
 }
@@ -293,7 +293,7 @@ canvas {
   background: #ffe4e6;
 }
 
-/* ===================== ״£״²״±״§״± ===================== */
+/* ===================== أزرار ===================== */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -409,6 +409,117 @@ canvas {
     font-size: 22px;
     font-weight: 900;
   }
+  .invoice-section-title {
+    margin-top: 14px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #aaa;
+    font-size: 14px;
+    font-weight: 900;
+  }
+  .invoice-totals {
+    display: grid;
+    gap: 8px;
+    padding-top: 14px;
+    border-top: 1px solid #111;
+  }
+  .invoice-totals > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .invoice-tax-note,
+  .invoice-thanks {
+    margin: 14px 0 0;
+    text-align: center;
+  }
+  .invoice-tax-note {
+    font-size: 11px;
+  }
+  .invoice-thanks {
+    padding-top: 12px;
+    border-top: 1px dashed #777;
+    font-size: 15px;
+    font-weight: 900;
+  }
+  .invoice-print-page--thermal .invoice-box {
+    width: 72mm;
+    max-width: 72mm;
+    padding: 3mm;
+    border: 0;
+    font-size: 11px;
+  }
+  .invoice-print-page--thermal .invoice-head {
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+  .invoice-print-page--thermal .invoice-head h1 {
+    font-size: 20px;
+  }
+  .invoice-print-page--thermal .invoice-head img {
+    width: 48px;
+    height: 48px;
+  }
+  .invoice-print-page--thermal .invoice-meta {
+    display: grid;
+    gap: 4px;
+    padding: 9px 0;
+  }
+  .invoice-print-page--thermal .invoice-lines {
+    gap: 6px;
+    padding: 9px 0;
+  }
+  .invoice-print-page--thermal .invoice-lines div,
+  .invoice-print-page--thermal .invoice-totals > div,
+  .invoice-print-page--thermal .invoice-total {
+    gap: 8px;
+    font-size: 11px;
+  }
+  .invoice-print-page--thermal .invoice-total {
+    padding-top: 8px;
+    font-size: 15px;
+  }
+}
+
+.invoice-format-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.invoice-format-options button {
+  display: grid;
+  min-height: 112px;
+  place-content: center;
+  gap: 7px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+.invoice-format-options button:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  transform: translateY(-1px);
+}
+.invoice-format-options button strong {
+  font-size: 16px;
+}
+.invoice-format-options button span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 480px) {
+  .invoice-format-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .invoice-format-options button {
+    min-height: 88px;
+  }
 }
 
 .global-tools {
@@ -421,6 +532,7 @@ canvas {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  gap: 8px;
   pointer-events: none;
 }
 .global-tools > * {
@@ -467,6 +579,35 @@ canvas {
   fill: currentColor;
   display: block;
   margin: auto;
+}
+.scroll-top-floating-button {
+  width: 40px;
+  height: 40px;
+  margin-inline-start: 3px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, #fff);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 88%, #fff);
+  color: #fff;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  pointer-events: none !important;
+  transform: translateY(-8px) scale(0.9);
+  transition: opacity 160ms ease, transform 160ms ease, background 160ms ease;
+}
+.scroll-top-floating-button.is-visible {
+  opacity: 1;
+  pointer-events: auto !important;
+  transform: translateY(0) scale(1);
+}
+.scroll-top-floating-button:hover {
+  background: var(--primary-hover);
+}
+.scroll-top-floating-button svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: auto;
+  fill: currentColor;
 }
 .a11y-layer {
   position: fixed;
@@ -1016,7 +1157,7 @@ canvas {
   white-space: nowrap;
 }
 
-/* ===================== ״¨״·״§‚״§״× ===================== */
+/* ===================== بطاقات ===================== */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1039,7 +1180,7 @@ canvas {
   font-weight: 700;
 }
 
-/* ===================== ״´״¨ƒ״§״× ===================== */
+/* ===================== شبكات ===================== */
 .grid {
   display: grid;
   gap: 18px;
@@ -1054,7 +1195,7 @@ canvas {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
-/* ===================== ״¨״·״§‚״© ״¥״­״µ״§״¦״© ===================== */
+/* ===================== بطاقة إحصائية ===================== */
 .stat {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1085,7 +1226,7 @@ canvas {
   margin-top: 4px;
 }
 
-/* ===================== ״¬״¯״§ˆ„ ===================== */
+/* ===================== جداول ===================== */
 .table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -1122,7 +1263,7 @@ tbody tr:hover {
   background: var(--surface-2);
 }
 
-/* ===================== ״´״§״±״§״× (Badges) ===================== */
+/* ===================== شارات (Badges) ===================== */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -1145,7 +1286,7 @@ tbody tr:hover {
   background: currentColor;
 }
 
-/* ===================== ״­‚ˆ„ ״§„״¥״¯״®״§„ ===================== */
+/* ===================== حقول الإدخال ===================== */
 .field {
   display: flex;
   flex-direction: column;
@@ -1366,6 +1507,42 @@ tbody tr:hover {
   display: grid;
   gap: 10px;
 }
+.logo-picker.is-compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 8px;
+}
+.logo-picker.is-compact .logo-picker-drop {
+  min-height: 70px;
+  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  place-items: center start;
+  column-gap: 9px;
+  padding: 9px 11px;
+  text-align: start;
+}
+.logo-picker.is-compact .logo-picker-icon {
+  grid-row: 1 / span 2;
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+}
+.logo-picker.is-compact .logo-picker-hint {
+  font-size: 10.5px;
+}
+.logo-picker.is-compact .brand-preview {
+  min-width: 104px;
+  gap: 6px;
+  padding: 6px;
+}
+.logo-picker.is-compact .brand-preview img {
+  width: 54px;
+  height: 54px;
+}
+.logo-picker.is-compact .brand-preview .btn {
+  min-width: 34px;
+  padding-inline: 7px;
+}
 .logo-picker-drop {
   min-height: 96px;
   border: 1.5px dashed var(--border-strong);
@@ -1509,7 +1686,7 @@ tbody tr:hover {
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: scale(0.97) translateY(8px); } }
 
-/* ===================== ״­״§„״§״× ===================== */
+/* ===================== حالات ===================== */
 .empty {
   text-align: center;
   padding: 48px 20px;
@@ -1535,7 +1712,7 @@ tbody tr:hover {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ===================== ״×ˆ״³״× (Toast) ===================== */
+/* ===================== توست (Toast) ===================== */
 .toast-stack {
   position: fixed;
   bottom: 24px;
@@ -1560,7 +1737,7 @@ tbody tr:hover {
 .toast-error { background: #b91c1c; }
 @keyframes slideup { from { opacity: 0; transform: translateY(12px); } }
 
-/* ===================== ״§„״¹†ˆ״§† ===================== */
+/* ===================== العنوان ===================== */
 .page-head {
   display: flex;
   align-items: flex-end;
@@ -1955,8 +2132,390 @@ tbody tr:hover {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .appointments-actions-cell .btn {
   white-space: nowrap;
+}
+
+.appointments-results,
+.appointments-card-list {
+  width: 100%;
+  min-width: 0;
+}
+
+.appointments-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.appointment-record-card {
+  --record-accent: var(--primary);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--record-accent);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.appointment-record-card:hover {
+  border-color: color-mix(in srgb, var(--record-accent) 34%, var(--border));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.appointment-record-card--completed,
+.appointment-record-card--confirmed {
+  --record-accent: var(--success);
+}
+
+.appointment-record-card--cancelled {
+  --record-accent: var(--danger);
+}
+
+.appointment-record-card--archived {
+  --record-accent: #64748b;
+}
+
+.appointment-record-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--record-accent) 4%, var(--surface));
+}
+
+.appointment-customer {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.appointment-customer-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.appointment-customer-main strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.appointment-customer > span,
+.appointment-customer-phone {
+  width: fit-content;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  unicode-bidi: plaintext;
+}
+
+.appointment-customer-phone:hover {
+  color: var(--record-accent);
+}
+
+.appointment-customer-main .appointment-service-name {
+  width: auto;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--record-accent) 18%, var(--border));
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--record-accent);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.appointment-head-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.appointment-head-actions .select,
+.appointment-head-actions select {
+  width: auto;
+  min-width: 126px;
+  max-width: 150px;
+  min-height: 36px;
+  padding-block: 5px;
+  font-size: 12px;
+}
+
+.appointment-head-actions .btn {
+  min-height: 36px;
+  padding-block: 6px;
+}
+
+.appointment-record-details {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.15fr) minmax(0, 1.15fr);
+  min-height: 76px;
+  padding: 0 13px;
+}
+
+.appointment-record-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding-block: 11px;
+  padding-inline: 11px;
+  border-inline-start: 1px solid var(--border);
+}
+
+.appointment-record-field:first-child {
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+.appointment-record-field:last-child {
+  padding-inline-end: 0;
+}
+
+.appointment-record-field > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.appointment-record-field strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.appointment-record-field small {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.appointment-payment-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dashboard-appointments .card-header {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.dashboard-appointments-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.dashboard-appointments-tabs button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dashboard-appointments-tabs button:hover {
+  color: var(--primary);
+}
+
+.dashboard-appointments-tabs button.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard-appointments-tabs button span {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 13%, transparent);
+  font-size: 11px;
+}
+
+.dashboard-appointment-list {
+  display: grid;
+}
+
+.dashboard-appointment-row {
+  display: grid;
+  grid-template-columns: 110px minmax(150px, 1.25fr) minmax(150px, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.dashboard-appointment-time,
+.dashboard-appointment-customer,
+.dashboard-appointment-meta {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.dashboard-appointment-time strong {
+  color: var(--primary);
+  font-size: 18px;
+}
+
+.dashboard-appointment-time span,
+.dashboard-appointment-customer span,
+.dashboard-appointment-meta span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dashboard-appointment-time small {
+  width: fit-content;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.dashboard-appointment-customer strong,
+.dashboard-appointment-meta strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.dashboard-appointment-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+@media (max-width: 760px) {
+  .dashboard-appointments .card-header {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-appointments .card-header > div:first-child {
+    width: 100%;
+  }
+
+  .dashboard-appointments-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .dashboard-appointment-row {
+    grid-template-columns: 74px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .dashboard-appointment-time strong {
+    font-size: 16px;
+  }
+
+  .dashboard-appointment-meta {
+    grid-column: 2;
+  }
+
+  .dashboard-appointment-row > .badge,
+  .dashboard-appointment-actions {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  .dashboard-appointment-actions {
+    flex-direction: column;
+  }
+
+  .dashboard-appointment-actions .btn {
+    width: 72px;
+  }
+
+  .appointment-record-head {
+    padding: 10px 12px;
+  }
+
+  .appointment-record-details {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 0 10px;
+  }
+
+  .appointment-record-field,
+  .appointment-record-field:first-child,
+  .appointment-record-field:last-child {
+    padding: 8px 0;
+    padding-inline: 8px;
+    border: 0;
+    border-inline-start: 1px solid var(--border);
+  }
+
+  .appointment-record-field:first-child {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+
+  .appointment-record-field:last-child {
+    padding-inline-end: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .appointment-record-head {
+    gap: 8px;
+  }
+
+  .appointment-head-actions {
+    flex: 0 0 auto;
+  }
+
+  .appointment-head-actions .select,
+  .appointment-head-actions select {
+    min-width: 118px;
+    max-width: 128px;
+  }
+
+  .appointment-head-actions .btn {
+    padding-inline: 10px;
+  }
 }

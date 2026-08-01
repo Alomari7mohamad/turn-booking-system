@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useRef } from "react";
 import { publicApi } from "../api/endpoints.js";
 import { setFavicon } from "../favicon.js";
 import { AppFooter } from "../components/AppFooter.jsx";
@@ -109,6 +110,7 @@ export default function PublicBooking() {
   const [paymentMethod, setPaymentMethod] = useState(null);
   const [customerForm, setCustomerForm] = useState({ name: "", email: "", dateOfBirth: "" });
   const [booking, setBooking] = useState(false);
+  const bookingRequestRef = useRef(false);
   const [bookErr, setBookErr] = useState("");
   const [success, setSuccess] = useState(null);
   const [cancelingId, setCancelingId] = useState(null);
@@ -128,6 +130,14 @@ export default function PublicBooking() {
     applyBrandTheme(data.business.brandColor);
     return () => resetBrandTheme();
   }, [data?.business?.brandColor]);
+
+  useEffect(() => {
+    document.documentElement.classList.add("public-booking-page");
+    document.documentElement.classList.toggle("public-booking-authenticated", Boolean(session?.token));
+    return () => {
+      document.documentElement.classList.remove("public-booking-page", "public-booking-authenticated");
+    };
+  }, [session?.token]);
 
   const business = data?.business;
   const services = data?.services || [];
@@ -159,12 +169,16 @@ export default function PublicBooking() {
     && monthStatus[selectedDate] === "available"
     && Boolean(slot);
 
-  const refreshAppointments = async (targetPhone = session?.phone) => {
+  const refreshAppointments = async (targetPhone = session?.phone, targetToken = session?.token) => {
     if (!targetPhone) return;
-    const res = await publicApi.findAppointmentByPhone(slug, targetPhone, true);
+    const res = await publicApi.findAppointmentByPhone(slug, targetPhone, true, targetToken);
     setAppointments(res.appointments || []);
-    if (res.customer?.name) {
-      setSession((current) => current ? { ...current, name: res.customer.name } : current);
+    if (res.customer) {
+      setSession((current) => current ? {
+        ...current,
+        name: res.customer.name || current.name,
+        balance: Number(res.customer.balance || 0),
+      } : current);
       setCustomerForm((current) => ({
         ...current,
         name: res.customer.name || current.name,
@@ -181,7 +195,7 @@ export default function PublicBooking() {
     };
     const timer = window.setInterval(refresh, 5000);
     return () => window.clearInterval(timer);
-  }, [session?.phone, slug]);
+  }, [session?.phone, session?.token, slug]);
 
   useEffect(() => {
     if (!appointmentToCancel) return undefined;
@@ -215,10 +229,10 @@ export default function PublicBooking() {
     try {
       const res = await publicApi.sendPhoneVerification(slug, phone);
       if (res.verified && res.token) {
-        const nextSession = { phone, token: res.token, name: "", email: "" };
+        const nextSession = { phone, token: res.token, name: "", email: "", balance: 0 };
         setSession(nextSession);
         setCustomerForm({ name: "", email: "", dateOfBirth: "" });
-        await refreshAppointments(phone);
+        await refreshAppointments(phone, res.token);
         return;
       }
       setLoginMessage(res.message || t("pb.codeSent"));
@@ -241,10 +255,10 @@ export default function PublicBooking() {
     setLoginMessage("");
     try {
       const res = await publicApi.confirmPhoneVerification(slug, { phone, code });
-      const nextSession = { phone, token: res.token, name: "", email: "" };
+      const nextSession = { phone, token: res.token, name: "", email: "", balance: 0 };
       setSession(nextSession);
       setCustomerForm({ name: "", email: "", dateOfBirth: "" });
-      await refreshAppointments(phone);
+      await refreshAppointments(phone, res.token);
     } catch (err) {
       setLoginMessage(err.message);
     } finally {
@@ -254,26 +268,34 @@ export default function PublicBooking() {
 
   useEffect(() => {
     if (activeTab !== "new" || step !== "time" || !service) return;
-    const selectedStatus = monthStatus[selectedDate];
-    if (monthLoading || selectedStatus !== "available") {
-      setSlots(monthLoading ? null : []);
-      setSlot(null);
-      return;
-    }
     let cancelled = false;
     setSlots(null);
     setSlot(null);
-    publicApi.availability(slug, { serviceId: service.id, employeeId: employee?.id || undefined, date: selectedDate })
+    publicApi.availability(slug, {
+      serviceId: service.id,
+      employeeId: employee?.id || undefined,
+      date: selectedDate,
+      customerPhone: session?.phone,
+    }, session?.token)
       .then((res) => {
-        if (!cancelled) setSlots(res.slots || []);
+        if (cancelled) return;
+        const nextSlots = res.slots || [];
+        setSlots(nextSlots);
+        setMonthStatus((current) => ({
+          ...current,
+          [selectedDate]: res.closed ? "closed" : (nextSlots.length ? "available" : "unavailable"),
+        }));
       })
       .catch(() => {
-        if (!cancelled) setSlots([]);
+        if (!cancelled) {
+          setSlots([]);
+          setMonthStatus((current) => ({ ...current, [selectedDate]: "unavailable" }));
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [activeTab, step, service, employee, selectedDate, slug, monthLoading, monthStatus]);
+  }, [activeTab, step, service, employee, selectedDate, slug, session?.phone, session?.token]);
 
   useEffect(() => {
     if (activeTab !== "new" || step !== "time" || !service) return;
@@ -283,39 +305,34 @@ export default function PublicBooking() {
     setSlots(null);
     setSlot(null);
     const days = calendarDays(monthDate);
-    Promise.all(days.map(async (date) => {
-      const dateStr = dateInputFrom(date);
-      if (isPastDate(dateStr)) return [dateStr, "past"];
-      try {
-        const res = await publicApi.availability(slug, { serviceId: service.id, employeeId: employee?.id || undefined, date: dateStr });
-        if (res.closed) return [dateStr, "closed"];
-        return [dateStr, (res.slots || []).length ? "available" : "unavailable"];
-      } catch {
-        return [dateStr, "closed"];
-      }
-    })).then((entries) => {
+
+    (async () => {
+      const res = await publicApi.availabilityCalendar(slug, {
+        serviceId: service.id,
+        employeeId: employee?.id || undefined,
+        from: dateInputFrom(days[0]),
+        to: dateInputFrom(days[days.length - 1]),
+        customerPhone: session?.phone,
+      }, session?.token);
       if (cancelled) return;
-      const nextStatus = Object.fromEntries(entries);
+      const nextStatus = res.statuses || {};
       setMonthStatus(nextStatus);
       setSelectedDate((currentDate) => {
         if (nextStatus[currentDate] === "available") return currentDate;
-        const firstAvailable = entries.find(([dateStr, status]) => {
+        const firstAvailable = Object.entries(nextStatus).find(([dateStr, status]) => {
           const date = new Date(`${dateStr}T00:00:00`);
           return status === "available" && date.getMonth() === monthDate.getMonth();
         });
         return firstAvailable ? firstAvailable[0] : currentDate;
       });
       setMonthLoading(false);
-    }).catch(() => {
-      if (!cancelled) {
-        setMonthStatus({});
-        setMonthLoading(false);
-      }
+    })().catch(() => {
+      if (!cancelled) setMonthLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [activeTab, step, service, employee, monthDate, slug]);
+  }, [activeTab, step, service, employee, monthDate, slug, session?.phone, session?.token]);
 
   useEffect(() => {
     if (methods.length === 1) setPaymentMethod(methods[0]);
@@ -359,6 +376,7 @@ export default function PublicBooking() {
   };
 
   const confirmBooking = async () => {
+    if (bookingRequestRef.current) return;
     const name = (customerForm.name || session?.name || "").trim();
     if (!name) {
       setBookErr(t("pb.enterName"));
@@ -369,6 +387,7 @@ export default function PublicBooking() {
       setBookErr(t("pb.choosePayment"));
       return;
     }
+    bookingRequestRef.current = true;
     setBooking(true);
     setBookErr("");
     try {
@@ -394,8 +413,32 @@ export default function PublicBooking() {
       setStep("success");
       await refreshAppointments(session.phone);
     } catch (err) {
-      setBookErr(err.message);
+      if (err.status === 409) {
+        setSlot(null);
+        setSlots(null);
+        setBookErr(t("pb.slotNoLongerAvailable"));
+        try {
+          const refreshed = await publicApi.availability(slug, {
+            serviceId: service.id,
+            employeeId: employee?.id || undefined,
+            date: selectedDate,
+            customerPhone: session?.phone,
+          }, session?.token);
+          const nextSlots = refreshed.slots || [];
+          setSlots(nextSlots);
+          setMonthStatus((current) => ({
+            ...current,
+            [selectedDate]: nextSlots.length ? "available" : "unavailable",
+          }));
+        } catch {
+          setSlots([]);
+          setMonthStatus((current) => ({ ...current, [selectedDate]: "unavailable" }));
+        }
+      } else {
+        setBookErr(err.message);
+      }
     } finally {
+      bookingRequestRef.current = false;
       setBooking(false);
     }
   };
@@ -416,7 +459,7 @@ export default function PublicBooking() {
     setCancelingId(appointmentToCancel.id);
     setCancelError("");
     try {
-      await publicApi.cancelAppointment(slug, appointmentToCancel.id, session.phone);
+      await publicApi.cancelAppointment(slug, appointmentToCancel.id, session.phone, session.token);
       await refreshAppointments(session.phone);
       setAppointmentToCancel(null);
     } catch (err) {
@@ -434,7 +477,7 @@ export default function PublicBooking() {
         name: customerForm.name,
         email: customerForm.email,
         dateOfBirth: customerForm.dateOfBirth,
-      });
+      }, session.token);
       const customer = res.customer || {};
       setCustomerForm((current) => ({
         ...current,
@@ -447,6 +490,7 @@ export default function PublicBooking() {
         name: customer.name || customerForm.name,
         email: customer.email || customerForm.email,
         dateOfBirth: customer.dateOfBirth || customerForm.dateOfBirth,
+        balance: Number(customer.balance ?? current.balance ?? 0),
       }));
       setSettingsMessage(t("pb.detailsSaved"));
     } catch (err) {
@@ -485,7 +529,7 @@ export default function PublicBooking() {
 
   if (!session?.token) {
     return (
-      <div className="booking-mobile-page" style={brandStyle}>
+      <div className="booking-mobile-page booking-login-page" style={brandStyle}>
         <div className={`booking-login-card ${hasLoginImage ? "has-login-image" : ""}`} style={loginCardStyle}>
           <div className="booking-login-top"><LanguageSwitcher /></div>
           {!hasLoginImage && (
@@ -526,9 +570,10 @@ export default function PublicBooking() {
                 </>
               )}
             </div>
+            <div className="booking-login-inline-footer"><AppFooter /></div>
           </div>
         </div>
-        <AppFooter />
+        {wazeUrl && <a className="waze-floating-button" href={wazeUrl} target="_blank" rel="noreferrer" aria-label="Waze"><img src="/waze.jpg" alt="" /></a>}
       </div>
     );
   }
@@ -577,6 +622,11 @@ export default function PublicBooking() {
           <main className="booking-app-content">
             <PageTitle title={t("pb.settings")} subtitle={t("pb.settingsSub")} />
             <div className="booking-panel">
+              <div className={`booking-customer-balance ${Number(session.balance || 0) < 0 ? "is-debt" : Number(session.balance || 0) > 0 ? "is-credit" : ""}`}>
+                <span>{t("pb.accountBalance")}</span>
+                <strong>{fmtPrice(session.balance || 0)}</strong>
+                {Number(session.balance || 0) < 0 && <small>{t("pb.debtReminder")}</small>}
+              </div>
               <Field label={t("pb.name")}>
                 <Input value={customerForm.name} onChange={(event) => setCustomerForm((current) => ({ ...current, name: event.target.value }))} />
               </Field>
@@ -647,42 +697,45 @@ export default function PublicBooking() {
                   <strong>{monthName(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1), "long")} {monthDate.getFullYear()}</strong>
                   <button onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>›</button>
                 </div>
-                {monthLoading ? (
-                  <div className="booking-calendar-loading"><Spinner /><span>{t("pb.checkingDays")}</span></div>
-                ) : (
-                  <div className="booking-calendar">
-                    {dayKeys.map((day) => <span key={day}>{day}</span>)}
-                    {calendarDays(monthDate).map((date) => {
-                      const dateStr = dateInputFrom(date);
-                      const status = monthStatus[dateStr];
-                      const outsideMonth = date.getMonth() !== monthDate.getMonth();
-                      const disabled = outsideMonth || status !== "available";
-                      const active = selectedDate === dateStr && status === "available";
-                      return (
-                        <button
-                          key={dateStr}
-                          disabled={disabled}
-                          className={`${active ? "active" : ""} ${disabled ? "disabled" : ""} ${status === "unavailable" ? "unavailable" : ""} ${status === "closed" ? "closed" : ""}`}
-                          onClick={() => {
-                            if (status === "available") setSelectedDate(dateStr);
-                          }}
-                        >
-                          {date.getDate()}
-                        </button>
-                      );
-                    })}
-                  </div>
+                {monthLoading && (
+                  <div className="booking-calendar-progress"><Spinner /><span>{t("pb.checkingDays")}</span></div>
                 )}
-                <h3 className="booking-section-title">{t("pb.chooseTime")}</h3>
-                {slots === null ? <Spinner /> : slots.length ? (
-                  <div className="booking-slots">
-                    {slots.map((item) => (
-                      <button key={item.startAt} className={slot?.startAt === item.startAt ? "active" : ""} onClick={() => setSlot(item)}>
-                        {item.time}
+                <div className={`booking-calendar ${monthLoading ? "is-loading" : ""}`}>
+                  {dayKeys.map((day) => <span key={day}>{day}</span>)}
+                  {calendarDays(monthDate).map((date) => {
+                    const dateStr = dateInputFrom(date);
+                    const status = monthStatus[dateStr];
+                    const outsideMonth = date.getMonth() !== monthDate.getMonth();
+                    const disabled = outsideMonth || status !== "available";
+                    const active = selectedDate === dateStr && status === "available";
+                    return (
+                      <button
+                        key={dateStr}
+                        disabled={disabled}
+                        className={`${active ? "active" : ""} ${disabled ? "disabled" : ""} ${status === "unavailable" ? "unavailable" : ""} ${status === "closed" ? "closed" : ""}`}
+                        onClick={() => {
+                          if (status === "available") setSelectedDate(dateStr);
+                        }}
+                      >
+                        {date.getDate()}
                       </button>
-                    ))}
-                  </div>
-                ) : <EmptyState title={t("pb.noTimes")} hint={t("pb.tryAnother")} />}
+                    );
+                  })}
+                </div>
+                {!monthLoading && (
+                  <>
+                    <h3 className="booking-section-title">{t("pb.chooseTime")}</h3>
+                    {slots === null ? <Spinner /> : slots.length ? (
+                      <div className="booking-slots">
+                        {slots.map((item) => (
+                          <button key={item.startAt} className={slot?.startAt === item.startAt ? "active" : ""} onClick={() => setSlot(item)}>
+                            {item.time}
+                          </button>
+                        ))}
+                      </div>
+                    ) : <EmptyState title={t("pb.noTimes")} hint={t("pb.tryAnother")} />}
+                  </>
+                )}
               </>
             )}
 
@@ -863,4 +916,3 @@ function SuccessView({ appointment, business, onCalendar, onShare, onHome }) {
 function Row({ label, value }) {
   return <div><span>{label}</span><strong>{value}</strong></div>;
 }
-

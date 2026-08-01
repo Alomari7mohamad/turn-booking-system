@@ -8,20 +8,17 @@ const TOKEN_KEY = "tb_token";
 function readToken() {
   const sessionToken = sessionStorage.getItem(TOKEN_KEY);
   if (sessionToken) return sessionToken;
-
-  const legacyToken = localStorage.getItem(TOKEN_KEY);
-  if (legacyToken) {
-    sessionStorage.setItem(TOKEN_KEY, legacyToken);
-    localStorage.removeItem(TOKEN_KEY);
-    return legacyToken;
-  }
-
-  return null;
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 export const tokenStore = {
   get: readToken,
-  set: (t) => {
+  set: (t, remember = false) => {
+    if (remember) {
+      localStorage.setItem(TOKEN_KEY, t);
+      sessionStorage.removeItem(TOKEN_KEY);
+      return;
+    }
     sessionStorage.setItem(TOKEN_KEY, t);
     localStorage.removeItem(TOKEN_KEY);
   },
@@ -45,10 +42,15 @@ api.interceptors.response.use(
     const message =
       err.response?.data?.message || err.message || "حدث خطأ غير متوقع";
     // 401 غير متعلق بمحاولة تسجيل الدخول => انتهت الجلسة
-    if (err.response?.status === 401 && !err.config?.url?.includes("/auth/login")) {
+    if (err.response?.status === 401
+      && !err.config?.url?.includes("/auth/login")
+      && !err.config?.url?.includes("/public/")) {
       tokenStore.clear();
       if (!location.pathname.startsWith("/login")) location.href = "/login";
     }
-    return Promise.reject(new Error(message));
+    const apiError = new Error(message);
+    apiError.status = err.response?.status;
+    apiError.data = err.response?.data;
+    return Promise.reject(apiError);
   }
 );

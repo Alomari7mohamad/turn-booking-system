@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { publicApi } from "../api/endpoints.js";
 import { Spinner } from "../components/ui.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 export default function AppointmentDelayResponse() {
   const { id, answer } = useParams();
+  const [searchParams] = useSearchParams();
   const { t } = useLanguage();
   const [state, setState] = useState({ loading: true, ok: false, message: "" });
 
   useEffect(() => {
     const response = answer === "accepted" ? "ACCEPTED" : "REJECTED";
-    publicApi.respondDelay(id, response)
+    publicApi.respondDelay(id, response, searchParams.get("token"))
       .then(() => {
         setState({
           loading: false,
@@ -20,7 +21,7 @@ export default function AppointmentDelayResponse() {
         });
       })
       .catch((err) => setState({ loading: false, ok: false, message: err.message || t("delay.error") }));
-  }, [answer, id]);
+  }, [answer, id, searchParams, t]);
 
   if (state.loading) return <Spinner page />;
 

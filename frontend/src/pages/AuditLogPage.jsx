@@ -7,13 +7,13 @@ import { Spinner, Badge, EmptyState, fmtDate, fmtTime } from "../components/ui.j
 // Enum -> display metadata. Technical action codes stay in the DB; labels are
 // live getters so the log follows the active language.
 const ACTION_META = {
-  BOOKING_CREATED: { get label() { return i18n.t("audit.actCreated"); }, icon: "📅", tone: "success" },
-  BOOKING_CANCELLED: { get label() { return i18n.t("audit.actCancelled"); }, icon: "🚫", tone: "danger" },
-  BOOKING_UPDATED: { get label() { return i18n.t("audit.actUpdated"); }, icon: "✏️", tone: "info" },
-  PAYMENT_STATUS_CHANGED: { get label() { return i18n.t("audit.actPayStatus"); }, icon: "💳", tone: "warning" },
-  PAYMENT_SETTINGS_CHANGED: { get label() { return i18n.t("audit.actPaySettings"); }, icon: "⚙️", tone: "primary" },
-  BUSINESS_SETTINGS_CHANGED: { get label() { return i18n.t("audit.actBizSettings"); }, icon: "🏪", tone: "info" },
-  WORKING_HOURS_CHANGED: { get label() { return i18n.t("audit.actHours"); }, icon: "🕐", tone: "primary" },
+  BOOKING_CREATED: { get label() { return i18n.t("audit.actCreated"); }, tone: "success" },
+  BOOKING_CANCELLED: { get label() { return i18n.t("audit.actCancelled"); }, tone: "danger" },
+  BOOKING_UPDATED: { get label() { return i18n.t("audit.actUpdated"); }, tone: "info" },
+  PAYMENT_STATUS_CHANGED: { get label() { return i18n.t("audit.actPayStatus"); }, tone: "warning" },
+  PAYMENT_SETTINGS_CHANGED: { get label() { return i18n.t("audit.actPaySettings"); }, tone: "primary" },
+  BUSINESS_SETTINGS_CHANGED: { get label() { return i18n.t("audit.actBizSettings"); }, tone: "info" },
+  WORKING_HOURS_CHANGED: { get label() { return i18n.t("audit.actHours"); }, tone: "primary" },
 };
 
 const FIELD_LABELS = {
@@ -28,17 +28,24 @@ const FIELD_LABELS = {
   get payAtStoreEnabled() { return i18n.t("audit.fldPayStore"); },
 };
 
+const ENTITY_LABELS = {
+  get Appointment() { return i18n.t("audit.entityAppointment"); },
+  get Business() { return i18n.t("audit.entityBusiness"); },
+  get WorkingHours() { return i18n.t("audit.entityWorkingHours"); },
+  get EmployeeWorkingHours() { return i18n.t("audit.entityEmployeeHours"); },
+};
+
 const formatMetaValue = (key, value) => {
   if (key === "changes" && Array.isArray(value)) return value.map((item) => FIELD_LABELS[item] || item).join("، ");
   if (typeof value === "boolean") return value ? i18n.t("audit.enabled") : i18n.t("audit.disabled");
   return String(value);
 };
 
-const formatMeta = (meta) => Object.entries(meta)
-  .map(([key, value]) => `${FIELD_LABELS[key] || key}: ${formatMetaValue(key, value)}`)
-  .join(" · ");
-
-const fmt = (d) => `${fmtDate(d)} ${fmtTime(d)}`;
+const formatMeta = (meta) => Object.entries(meta).map(([key, value]) => ({
+  key,
+  label: FIELD_LABELS[key] || key,
+  value: formatMetaValue(key, value),
+}));
 
 export default function AuditLogPage() {
   const { api } = useBusinessManage();
@@ -60,44 +67,52 @@ export default function AuditLogPage() {
         </div>
       </div>
 
-      <div className="card">
-        {logs.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("audit.event")}</th>
-                  <th>{t("audit.details")}</th>
-                  <th>{t("audit.by")}</th>
-                  <th>{t("audit.time")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((l) => {
-                  const m = ACTION_META[l.action] || { label: l.action, icon: "•", tone: "muted" };
-                  let meta = null;
-                  try { meta = l.meta ? JSON.parse(l.meta) : null; } catch { meta = null; }
-                  return (
-                    <tr key={l.id}>
-                      <td><Badge tone={m.tone}>{m.icon} {m.label}</Badge></td>
-                      <td className="muted" style={{ fontSize: 13 }}>
-                        {l.entityType}{l.entityId ? ` #${l.entityId}` : ""}
-                        {meta && (
-                          <span className="soft"> · {formatMeta(meta)}</span>
-                        )}
-                      </td>
-                      <td>{l.actorName || "—"}</td>
-                      <td className="muted" style={{ fontSize: 13, whiteSpace: "nowrap" }}>{fmt(l.createdAt)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState icon="📋" title={t("audit.noEvents")} hint={t("audit.noEventsHint")} />
-        )}
-      </div>
+      {logs.length ? (
+        <section className="audit-log-grid">
+          {logs.map((l) => {
+            const m = ACTION_META[l.action] || { label: l.action, tone: "muted" };
+            let meta = null;
+            try { meta = typeof l.meta === "string" ? JSON.parse(l.meta) : l.meta; } catch { meta = null; }
+            const metaItems = meta ? formatMeta(meta) : [];
+            return (
+              <article className={`audit-log-card audit-log-tone-${m.tone}`} key={l.id}>
+                <header className="audit-log-card-head">
+                  <Badge tone={m.tone}>{m.label}</Badge>
+                  <time dateTime={l.createdAt}>
+                    <strong>{fmtDate(l.createdAt)}</strong>
+                    <span>{fmtTime(l.createdAt)}</span>
+                  </time>
+                </header>
+
+                <div className="audit-log-card-body">
+                  <div className="audit-log-entity">
+                    <span>{t("audit.details")}</span>
+                    <strong>{ENTITY_LABELS[l.entityType] || l.entityType}{l.entityId ? ` #${l.entityId}` : ""}</strong>
+                  </div>
+
+                  {metaItems.length > 0 && (
+                    <div className="audit-log-meta">
+                      {metaItems.map((item) => (
+                        <div key={item.key}>
+                          <span>{item.label}</span>
+                          <strong>{item.value}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <footer className="audit-log-card-footer">
+                  <span>{t("audit.by")}</span>
+                  <strong>{l.actorName || "—"}</strong>
+                </footer>
+              </article>
+            );
+          })}
+        </section>
+      ) : (
+        <EmptyState title={t("audit.noEvents")} hint={t("audit.noEventsHint")} />
+      )}
     </>
   );
 }

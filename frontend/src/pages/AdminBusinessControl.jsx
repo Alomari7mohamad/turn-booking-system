@@ -10,8 +10,8 @@ const TABS = [
   { to: "statistics", key: "navStatistics" },
   { to: "customers", key: "navCustomers" },
   { to: "appointments", key: "navAppointments" },
-  { to: "appointments/manage", key: "navAppointmentsManagement" },
-  { to: "appointments/rejected", key: "navRejectedAppointments" },
+  { to: "appointments/late", key: "navLateAppointments" },
+  { to: "appointments/archive", key: "navArchive" },
   { to: "services", key: "navServices" },
   { to: "employees", key: "navEmployees" },
   { to: "secretary", key: "navSecretary" },
@@ -66,4 +66,3 @@ export default function AdminBusinessControl() {
     </BusinessManageProvider>
   );
 }
-

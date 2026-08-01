@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useBusinessManage } from "../context/BusinessManageContext.jsx";
 import { useToast } from "../components/Toast.jsx";
 import { Modal } from "../components/Modal.jsx";
-import { buildReviewUrl, buildReviewWhatsappUrl } from "../reviewLinks.js";
+import { buildReviewUrl, buildReviewWhatsappUrl, buildWhatsappMessageUrl } from "../reviewLinks.js";
 import {
   Badge,
   Button,
@@ -53,7 +53,7 @@ function queuePaymentLabel(appointment, filter) {
   return PAYMENT_STATUS_META[appointment.paymentStatus]?.label || appointment.paymentStatus;
 }
 
-export default function BookingManagementPage() {
+export default function BookingManagementPage({ lateOnly = false }) {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { api, business } = useBusinessManage();
@@ -61,7 +61,7 @@ export default function BookingManagementPage() {
   const toast = useToast();
   const today = todayInput();
   const [data, setData] = useState(null);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(() => (lateOnly ? "late" : "all"));
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [requeue, setRequeue] = useState(null);
@@ -78,8 +78,7 @@ export default function BookingManagementPage() {
       late: appointments.filter(
         (item) =>
           isExpired(item) &&
-          !isPaid(item) &&
-          !["CANCELLED", "NO_SHOW", "COMPLETED"].includes(item.status)
+          item.status === "CONFIRMED"
       ),
       rejected: appointments.filter((item) => item.status === "CANCELLED"),
       paidExpired: appointments.filter((item) => isExpired(item) && isPaid(item)),
@@ -174,30 +173,40 @@ export default function BookingManagementPage() {
     }
   };
 
+  const askAboutNoShow = (appointment) => {
+    const message = t("noShowWhatsappMessage", { name: appointment.customerName || "" });
+    window.open(
+      buildWhatsappMessageUrl(appointment.customerPhone, message),
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
+
   return (
     <div data-no-auto-translate="true">
       <div className="page-head">
         <div>
-          <div className="page-title">{t("navAppointmentsManagement")}</div>
-          <div className="page-sub">{t("bm.sub")}</div>
+          <div className="page-title">{lateOnly ? t("navLateAppointments") : t("navAppointmentsManagement")}</div>
+          <div className="page-sub">{lateOnly ? t("bm.lateSub") : t("bm.sub")}</div>
         </div>
       </div>
 
-      <div className="card card-pad">
-        <div className="row wrap" style={{ gap: 8 }}>
-          {FILTERS.map((item) => (
-            <button
-              key={item.key}
-              className={`btn btn-sm ${filter === item.key ? "btn-primary" : "btn-ghost"}`}
-              onClick={() => setFilter(item.key)}
-              type="button"
-            >
-              {t(item.labelKey)} ({groups[item.key]?.length || 0})
-            </button>
-          ))}
-        </div>
-        {filter === "all" && (
-          <div className="grid grid-2 mt-3">
+      {!lateOnly && (
+        <div className="card card-pad">
+          <div className="booking-management-filters">
+            {FILTERS.map((item) => (
+              <button
+                key={item.key}
+                className={`btn btn-sm ${filter === item.key ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => setFilter(item.key)}
+                type="button"
+              >
+                {t(item.labelKey)} ({groups[item.key]?.length || 0})
+              </button>
+            ))}
+          </div>
+          {filter === "all" && (
+          <div className="booking-management-dates mt-3">
             <Field label={t("cust.fromDate")}>
               <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
             </Field>
@@ -205,88 +214,101 @@ export default function BookingManagementPage() {
               <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
             </Field>
           </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
-      <div className="card mt-3">
+      <section className="booking-management-results mt-3">
         {rows.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("customer")}</th>
-                  <th>{t("service")}</th>
-                  <th>{t("employee")}</th>
-                  <th>{t("sd.appointment")}</th>
-                  <th>{t("sd.amount")}</th>
-                  <th>{t("status")}</th>
-                  <th>{t("ap.payment")}</th>
-                  <th>{t("action")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((appointment) => {
-                  const amount = amountOf(appointment);
-                  const paid = isPaid(appointment);
-                  const paymentLabel = queuePaymentLabel(appointment, filter);
-                  return (
-                    <tr key={appointment.id}>
-                      <td style={{ fontWeight: 700 }}>
-                        {appointment.customerName}
-                        <div className="soft">{appointment.customerPhone}</div>
-                      </td>
-                      <td>{appointment.service?.name}</td>
-                      <td>{appointment.employee?.name || "-"}</td>
-                      <td>
-                        {fmtDate(appointment.startAt)}{" "}
-                        <span className="soft">
-                          {fmtTime(appointment.startAt)} - {fmtTime(appointment.endAt)}
-                        </span>
-                      </td>
-                      <td>{amount === 0 ? t("pb.free") : fmtPrice(amount)}</td>
-                      <td>
-                        <Badge tone={STATUS_META[appointment.status]?.tone}>
-                          {STATUS_META[appointment.status]?.label || appointment.status}
-                        </Badge>
-                      </td>
-                      <td>
+          <div className="booking-management-card-grid">
+            {rows.map((appointment) => {
+              const amount = amountOf(appointment);
+              const paid = isPaid(appointment);
+              const paymentLabel = queuePaymentLabel(appointment, filter);
+              const canSendReview = appointment.status === "COMPLETED" && currentBusiness?.reviewsEnabled && !appointment.review;
+              const isNoShow = appointment.status === "NO_SHOW";
+              const hasActions = canSendReview || filter === "late";
+
+              return (
+                <article className="booking-management-card" key={appointment.id}>
+                  <header className={`booking-management-card-head${isNoShow ? " is-no-show" : ""}`}>
+                    <div className="booking-management-customer">
+                      <div className="booking-management-customer-title">
+                        <strong>{appointment.customerName}</strong>
+                        <span>{appointment.service?.name || "-"}</span>
+                      </div>
+                      <a href={`tel:${appointment.customerPhone}`}>{appointment.customerPhone}</a>
+                    </div>
+                    <div className="booking-management-head-actions">
+                      {isNoShow && (
+                        <button
+                          type="button"
+                          className="no-show-whatsapp-button"
+                          onClick={() => askAboutNoShow(appointment)}
+                        >
+                          {t("sendNoShowWhatsappShort")}
+                        </button>
+                      )}
+                      <Badge tone={STATUS_META[appointment.status]?.tone}>
+                        {STATUS_META[appointment.status]?.label || appointment.status}
+                      </Badge>
+                    </div>
+                  </header>
+
+                  <div className={`booking-management-card-details${isNoShow ? " is-no-show" : ""}`}>
+                    <div>
+                      <span>{t("employee")}</span>
+                      <strong>{appointment.employee?.name || "-"}</strong>
+                    </div>
+                    <div>
+                      <span>{t("sd.appointment")}</span>
+                      <strong>{fmtDate(appointment.startAt)}</strong>
+                      <small>{fmtTime(appointment.startAt)} - {fmtTime(appointment.endAt)}</small>
+                    </div>
+                    {!isNoShow && (
+                      <div className="booking-management-payment">
+                        <span>{t("ap.payment")}</span>
+                        <strong>{amount === 0 ? t("pb.free") : fmtPrice(amount)}</strong>
                         {paymentLabel === "-" ? (
-                          <span className="soft">-</span>
+                          <small>-</small>
                         ) : (
                           <Badge tone={paid ? "success" : "warning"}>{paymentLabel}</Badge>
                         )}
-                      </td>
-                      <td>
-                        {appointment.status === "COMPLETED" && currentBusiness?.reviewsEnabled && !appointment.review ? (
-                          <Button size="sm" variant="primary" onClick={() => sendReviewLink(appointment)}>
-                            {t("sd.sendReview")}
+                      </div>
+                    )}
+                  </div>
+
+                  {hasActions && (
+                    <footer className="booking-management-card-actions">
+                      {canSendReview ? (
+                        <Button size="sm" variant="primary" onClick={() => sendReviewLink(appointment)}>
+                          {t("sd.sendReview")}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => markNoShow(appointment)}>
+                            {t("statusNoShow")}
                           </Button>
-                        ) : filter === "late" ? (
-                          <div className="row wrap" style={{ gap: 6 }}>
-                            <Button size="sm" variant="ghost" onClick={() => markNoShow(appointment)}>
-                              {t("statusNoShow")}
-                            </Button>
-                            <Button size="sm" variant="secondary" onClick={() => openRequeue(appointment)}>
-                              {t("bm.requeueBtn")}
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="soft">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          <Button size="sm" variant="secondary" onClick={() => openRequeue(appointment)}>
+                            {t("bm.requeueBtn")}
+                          </Button>
+                        </>
+                      )}
+                    </footer>
+                  )}
+                </article>
+              );
+            })}
           </div>
         ) : (
-          <EmptyState
-            title={t("bm.noRows")}
-            hint={t("bm.noRowsHint")}
-          />
+          <div className="card">
+            <EmptyState
+              title={t("bm.noRows")}
+              hint={t("bm.noRowsHint")}
+            />
+          </div>
         )}
-      </div>
+      </section>
 
       <Modal open={!!requeue} onClose={() => setRequeue(null)} title={t("bm.chooseNewTime")} large>
         {!requeue || requeue.loading ? (
